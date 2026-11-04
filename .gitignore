@@ -40,3 +40,7 @@ reports/
 logs/
 *.log
 traces.jsonl
+docs/project_full_context.md
+
+# Task 2 private budget state and offline-test artifacts
+.runtime/

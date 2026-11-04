@@ -4,6 +4,7 @@
 
 - This project extends the existing Python research-agent code from Tech With Tim's tutorial; inspect the actual GitHub repository before proposing architectural changes.
 - Read `agent_spec.md` before planning or implementing anything. It is the primary approved reference for the agent's goal, six allowed tools, budgets, permissions, and three behavioral scenarios.
+- - Read docs/project_full_context.md for the full project context, capstone requirements, and background decisions. Use agent_spec.md as the primary approved specification. If the documents conflict, report the conflict and ask for clarification before implementation.
 - If a project scope document (`PROPOSAL.md`, `proposal.md`, or a clearly named scope document) is present, read it as supporting context. Do not invent or require missing documents.
 - Inspect `README.md`, dependency files, and the existing source code to distinguish implemented features from planned features.
 - Report contradictions between the repository, `agent_spec.md`, and the current task before changing code. Never silently revise the scope or specifications.
