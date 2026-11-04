@@ -16,6 +16,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import Field
 
 from safety import validate_local_path
+from tracing import NullTrace
 
 ROOT = Path(__file__).resolve().parent
 MODEL = "gpt-6-luna"
@@ -33,6 +34,10 @@ _THREAD_LOCK = threading.RLock()
 
 class BudgetStop(RuntimeError):
     """A safe, user-facing reason to refuse or stop a model call."""
+
+    def __init__(self, message: str, code: str = "budget_stop"):
+        super().__init__(message)
+        self.code = code
 
 
 def today() -> str:
@@ -81,11 +86,12 @@ class UsageLedger:
         self.path = path or ROOT / ".runtime" / "usage.json"
 
     @contextmanager
-    def transaction(self):
+    def transaction(self, *, write: bool = True):
         validate_local_path(self.path, ROOT / ".runtime")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         lock = self.path.with_suffix(".lock")
         validate_local_path(lock, ROOT / ".runtime")
+        prior_lock = lock.exists()
         with locked_file(lock):
             try:
                 if self.path.exists():
@@ -103,10 +109,14 @@ class UsageLedger:
                     if len({call["id"] for call in state["calls"]}) != len(state["calls"]):
                         raise ValueError("Duplicate ledger entry")
                 else:
+                    if prior_lock:
+                        raise ValueError("Previously initialized ledger is missing")
                     state = {"version": 1, "calls": []}
             except (ValueError, OSError, TypeError, AttributeError):
                 raise BudgetStop("سجل الميزانية غير صالح؛ أُوقف الاتصال لحماية الرصيد.") from None
             yield state
+            if not write:
+                return
             temporary = self.path.with_suffix(".pending")
             validate_local_path(temporary, ROOT / ".runtime")
             with temporary.open("w", encoding="utf-8") as handle:
@@ -114,6 +124,18 @@ class UsageLedger:
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temporary, self.path)
+
+    def snapshot(self, task: str | None = None) -> dict:
+        if not self.path.exists():
+            if self.path.with_suffix(".lock").exists():
+                raise BudgetStop("سجل الميزانية السابق مفقود؛ أُوقف التشغيل دون تصفير الرصيد.")
+            return {"calls": 0, "task_nanos": 0, "day_nanos": 0, "project_nanos": 0, "reserved_nanos": 0}
+        with self.transaction(write=False) as state:
+            calls = state["calls"]
+            return {"calls": len(calls), "task_nanos": sum(c["charge"] for c in calls if c["task"] == task),
+                    "day_nanos": sum(c["charge"] for c in calls if c["day"] == today()),
+                    "project_nanos": sum(c["charge"] for c in calls),
+                    "reserved_nanos": sum(c["charge"] for c in calls if c["status"] == "reserved")}
 
     def reserve(self, task: str, input_bound: int, output_bound: int) -> str:
         if (type(input_bound) is not int or type(output_bound) is not int
@@ -125,12 +147,13 @@ class UsageLedger:
             calls = state["calls"]
             task_calls = [call for call in calls if call["task"] == task]
             if len(task_calls) >= MAX_TURNS:
-                raise BudgetStop("توقفت المهمة عند حد 10 استدعاءات للنموذج.")
+                raise BudgetStop("توقفت المهمة عند حد 10 استدعاءات للنموذج.", "turn_limit")
             totals = [sum(call["charge"] for call in task_calls),
                       sum(call["charge"] for call in calls if call["day"] == today()),
                       sum(call["charge"] for call in calls)]
-            if any(total + estimate > cap for total, cap in zip(totals, [TASK_CAP, DAY_CAP, PROJECT_CAP])):
-                raise BudgetStop("الميزانية المتبقية لا تكفي للاستدعاء المتوقع؛ لم يُرسل الطلب.")
+            for total, cap, code in zip(totals, [TASK_CAP, DAY_CAP, PROJECT_CAP], ["task_budget", "daily_budget", "project_budget"]):
+                if total + estimate > cap:
+                    raise BudgetStop("الميزانية المتبقية لا تكفي للاستدعاء المتوقع؛ لم يُرسل الطلب.", code)
             reservation = uuid4().hex
             calls.append({"id": reservation, "task": task, "day": today(), "model": MODEL,
                           "status": "reserved", "charge": estimate,
@@ -159,7 +182,9 @@ class UsageLedger:
 
 
 class BudgetSession:
-    def __init__(self, ledger: UsageLedger, task_id: str | None = None):
+    def __init__(self, ledger: UsageLedger, task_id: str | None = None, *, trace=None, mode="web"):
+        if mode not in {"web", "scientific"}:
+            raise ValueError("Invalid research mode")
         self.ledger = ledger
         self.task_id = task_id or uuid4().hex
         self.calls = 0
@@ -167,6 +192,8 @@ class BudgetSession:
         self.output_tokens = 0
         self.pending: dict[str, int] = {}
         self.measured_cost = 0
+        self.trace = trace or NullTrace()
+        self.mode = mode
 
     def reserve_payload(self, payload: dict[str, Any]) -> str:
         allowed_fields = {"model", "messages", "max_completion_tokens", "reasoning_effort", "n",
@@ -182,7 +209,8 @@ class BudgetSession:
             raise BudgetStop("حد توكنات الإخراج غير آمن.")
         if any(not isinstance(message.get("content"), (str, type(None))) for message in payload.get("messages", [])):
             raise BudgetStop("هذا الإصدار يحسب تكلفة النص فقط.")
-        allowed = {"duckduckgo_search", "wikipedia_lookup", "save_report_to_disk"}
+        allowed = ({"search_semantic_scholar", "search_openalex", "search_arxiv", "save_report_to_disk"}
+                   if self.mode == "scientific" else {"duckduckgo_search", "wikipedia_lookup", "save_report_to_disk"})
         for tool in payload.get("tools", []):
             if tool.get("type") != "function" or tool.get("function", {}).get("name") not in allowed:
                 raise BudgetStop("أداة غير معتمدة في طلب النموذج.")
@@ -194,6 +222,8 @@ class BudgetSession:
         reservation = self.ledger.reserve(self.task_id, input_bound, output)
         self.calls += 1
         self.pending[reservation] = input_bound * 125 + output * OUTPUT_RATE
+        self.trace.emit("model_reserved", reservation_id=reservation, input_bound=input_bound,
+                        max_output_tokens=output, estimated_nanos=self.pending[reservation])
         return reservation
 
     def summary(self) -> str:
@@ -219,18 +249,33 @@ class GuardedChatOpenAI(ChatOpenAI):
         if self.max_retries != 0 or self.openai_api_base != "https://api.openai.com/v1":
             raise BudgetStop("المحاولات التلقائية أو عنوان المزوّد غير معتمد.")
         payload = self._get_request_payload(messages, stop=stop, **kwargs)
-        reservation = self.session.reserve_payload(payload)
+        try:
+            reservation = self.session.reserve_payload(payload)
+        except BudgetStop as error:
+            self.session.trace.emit("budget_blocked", reason=error.code)
+            raise
         # Errors/timeouts/Ctrl+C leave a charged reservation: the server might
         # already have processed the request. Never automatically retry it.
-        result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        try:
+            result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        except BaseException:
+            self.session.trace.emit("model_error", reservation_id=reservation, error_code="transport_or_provider_error")
+            raise
         usage = result.generations[0].message.usage_metadata or {}
-        exceeded = self.session.ledger.settle(reservation, usage)
+        try:
+            exceeded = self.session.ledger.settle(reservation, usage)
+        except BudgetStop:
+            self.session.trace.emit("model_error", reservation_id=reservation, error_code="usage_unavailable_or_invalid")
+            raise
         self.session.input_tokens += usage["input_tokens"]
         self.session.output_tokens += usage["output_tokens"]
         cached = (usage.get("input_token_details") or {}).get("cache_read", 0)
         self.session.measured_cost += ((usage["input_tokens"] - cached) * INPUT_RATE
                                        + cached * CACHED_INPUT_RATE + usage["output_tokens"] * OUTPUT_RATE)
         self.session.pending.pop(reservation, None)
+        self.session.trace.emit("model_usage", reservation_id=reservation,
+            input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"], cached_input_tokens=cached,
+            cost_nanos=(usage["input_tokens"] - cached) * INPUT_RATE + cached * CACHED_INPUT_RATE + usage["output_tokens"] * OUTPUT_RATE)
         if exceeded:
             raise BudgetStop("تجاوز الاستهلاك الحدود المقدرة؛ أُوقفت المهمة. راجع سجل الميزانية.")
         return result

@@ -13,6 +13,7 @@ from uuid import uuid4
 from langchain_core.tools import StructuredTool
 
 from safety import clean_text, safe_url, validate_local_path
+from tracing import NullTrace
 
 ROOT = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
@@ -62,14 +63,19 @@ class WebResearchContext:
     attempted: set[tuple[str, str]] = field(default_factory=set)
     requested_filename: str | None = None
     final_content: str | None = None
+    mode: str = "web"
+    trace: Any = field(default_factory=NullTrace)
 
     def _lookup(self, name: str, query: str, backend: Callable) -> dict[str, Any]:
         self.calls.append(name)
+        self.trace.emit("tool_started", tool=name)
         if not isinstance(query, str) or not query.strip() or len(query) > 500:
+            self.trace.emit("tool_error", tool=name, error_code="invalid_query")
             return {"status": "error", "message": "Query must contain 1–500 characters."}
         query = clean_text(query, 500)
         key = (name, query.casefold())
         if key in self.attempted:
+            self.trace.emit("tool_error", tool=name, error_code="duplicate_query_blocked")
             return {"status": "error", "message": "Already attempted; use another query or source."}
         self.attempted.add(key)
         try:
@@ -86,11 +92,14 @@ class WebResearchContext:
                 results.append(record)
             if not results:
                 self.errors.append(name + ": لا نتائج قابلة للاستشهاد")
+            self.trace.emit("tool_result", tool=name, result_count=len(results),
+                            source_count=len(self.sources), sources=list(self.sources))
             return {"status": "ok" if results else "empty", "untrusted_data": True,
                     "results": results}
         except Exception as error:
             LOGGER.warning("Public search failed: %s (%s)", name, type(error).__name__)
             self.errors.append(name + ": تعذّر الوصول")
+            self.trace.emit("tool_error", tool=name, error_code="public_search_failed")
             return {"status": "error", "message": "Public search failed; try the other web source."}
 
     def duckduckgo_search(self, query: str) -> dict[str, Any]:
@@ -114,6 +123,7 @@ class WebResearchContext:
         self.calls.append("save_report_to_disk")
         try:
             self.validate_filename(filename)
+            self.trace.emit("save_requested", filename=filename)
             if self.final_content is None:
                 self.requested_filename = filename
                 return {"status": "pending", "message": "Queued; a human must confirm after the validated final answer."}
@@ -121,7 +131,9 @@ class WebResearchContext:
             self.display("\nالتقرير المراد حفظه:\n" + content)
             answer = self.confirm(f"هل توافق على حفظ التقرير داخل reports باسم مشتق من {filename}؟ [y/n] ")
             if answer.strip().casefold() not in {"y", "yes", "نعم"}:
+                self.trace.emit("save_decision", decision="declined", filename=filename)
                 return {"status": "declined", "message": "رُفض الحفظ؛ لم يُنشأ ملف."}
+            self.trace.emit("save_decision", decision="approved", filename=filename)
             self.validate_filename(filename)
             self.reports_dir.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -129,16 +141,24 @@ class WebResearchContext:
             validate_local_path(target, ROOT / "reports")
             with target.open("x", encoding="utf-8") as handle:
                 handle.write(f"--- Research Output ---\nTimestamp: {stamp}\n\n{content}\n")
+            self.trace.emit("save_result", status="saved", filename=target.name)
             return {"status": "saved", "filename": target.name, "message": "حُفظ التقرير بعد موافقتك."}
         except (EOFError, KeyboardInterrupt):
+            self.trace.emit("save_decision", decision="cancelled")
             return {"status": "declined", "message": "أُلغي التأكيد؛ لم يُحفظ تقرير."}
         except Exception as error:
             LOGGER.warning("Report not saved (%s)", type(error).__name__)
-            return {"status": "error", "message": "تعذّر الحفظ داخل مجلد التقارير المسموح."}
+            self.trace.emit("save_result", status="error", error_code="save_failed")
+            return {"status": "error", "message": "تعذّر تأكيد الحفظ؛ تحقق من reports قبل إعادة المحاولة."}
 
 
 def build_tools(context: WebResearchContext) -> list[StructuredTool]:
-    return [StructuredTool.from_function(func) for func in (
-        context.duckduckgo_search, context.wikipedia_lookup, context.save_report_to_disk,
-    )]
+    if context.mode == "scientific":
+        functions = (context.search_semantic_scholar, context.search_openalex, context.search_arxiv,
+                     context.save_report_to_disk)
+    elif context.mode == "web":
+        functions = (context.duckduckgo_search, context.wikipedia_lookup, context.save_report_to_disk)
+    else:
+        raise ValueError("Invalid research mode")
+    return [StructuredTool.from_function(func) for func in functions]
 

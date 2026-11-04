@@ -13,6 +13,7 @@ def clean_text(value: str, limit: int) -> str:
     value = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
     value = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", value)
     value = re.sub(r"\bsk-[A-Za-z0-9_-]{12,}", "[REDACTED]", value)
+    value = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*", "Bearer [REDACTED]", value)
     value = re.sub(
         r"(?i)\b(api[_ -]?key|password|secret|access[_ -]?token)\s*[:=]\s*[^\s,;]+",
         r"\1=[REDACTED]", value,

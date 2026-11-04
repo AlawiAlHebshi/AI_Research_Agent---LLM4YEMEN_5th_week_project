@@ -51,6 +51,11 @@ class OfflineTests(unittest.TestCase):
         self.test_id = uuid4().hex
         self.work = ROOT / ".runtime" / "tests" / self.test_id
         self.work.mkdir(parents=True)
+        from tracing import TraceWriter
+
+        trace_patch = patch("main.TraceWriter", side_effect=lambda: TraceWriter(kind="offline_test", path=self.work / (uuid4().hex + ".jsonl")))
+        trace_patch.start()
+        self.addCleanup(trace_patch.stop)
         self.network = patch.object(socket.socket, "connect", side_effect=AssertionError("Real network forbidden"))
         self.network.start()
         self.addCleanup(self.network.stop)
@@ -338,10 +343,10 @@ class OfflineTests(unittest.TestCase):
     def test_cli_empty_scientific_and_missing_key_make_no_calls(self):
         with patch("main.load_dotenv") as loader, patch.dict("os.environ", {}, clear=True), contextlib.redirect_stdout(self.out):
             self.assertEqual(main(["--query", ""]), 2)
-            self.assertEqual(main(["--mode", "scientific", "--query", "RAG"]), 2)
             loader.assert_not_called()
+            self.assertEqual(main(["--mode", "scientific", "--query", "RAG"]), 2)
             self.assertEqual(main(["--query", "MCP"]), 2)
-            loader.assert_called_once()
+            self.assertEqual(loader.call_count, 2)
         self.assertEqual(self.requests, [])
 
     def test_backend_parameters_are_bounded(self):

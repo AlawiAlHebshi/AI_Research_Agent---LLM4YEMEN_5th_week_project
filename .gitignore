@@ -44,3 +44,6 @@ docs/project_full_context.md
 
 # Task 2 private budget state and offline-test artifacts
 .runtime/
+
+# Private traces stay under .runtime. Only deliberate sanitized evidence exports
+# use traces/success_1.jsonl, near_failure_recovery.jsonl, explicit_failure.jsonl.
