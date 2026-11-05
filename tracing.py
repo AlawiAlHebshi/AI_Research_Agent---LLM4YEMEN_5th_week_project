@@ -17,13 +17,14 @@ EVENTS = {
     "model_error", "budget_blocked", "tool_started", "tool_result", "tool_error",
     "tool_cache_hit", "recovery_started", "save_requested", "save_decision", "save_result",
     "mcp_connected", "mcp_usage",
+    "memory_loaded", "memory_saved", "memory_error",
 }
 FIELDS = {
     "mode", "status", "reason", "tool", "error_code", "result_count", "source_count",
     "sources", "reservation_id", "input_bound", "max_output_tokens", "estimated_nanos",
     "input_tokens", "output_tokens", "cached_input_tokens", "cost_nanos", "calls",
     "filename", "decision", "cache_hit", "public_requests", "bytes_received",
-    "reserved_nanos",
+    "reserved_nanos", "source_index", "source_issue",
 }
 
 

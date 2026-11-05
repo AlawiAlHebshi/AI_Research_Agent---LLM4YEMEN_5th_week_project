@@ -33,6 +33,10 @@ Thumbs.db
 # Local databases
 *.db
 *.sqlite3
+*.sqlite
+*.db-*
+*.sqlite3-*
+*.sqlite-*
 
 # Generated research files and logs
 research_output.txt

@@ -56,6 +56,10 @@ class OfflineTests(unittest.TestCase):
         trace_patch = patch("main.TraceWriter", side_effect=lambda: TraceWriter(kind="offline_test", path=self.work / (uuid4().hex + ".jsonl")))
         trace_patch.start()
         self.addCleanup(trace_patch.stop)
+        from memory import ResearchMemory
+        memory_patch = patch("main.ResearchMemory", side_effect=lambda *args, **kwargs: ResearchMemory(self.work / "memory.sqlite3"))
+        memory_patch.start()
+        self.addCleanup(memory_patch.stop)
         self.network = patch.object(socket.socket, "connect", side_effect=AssertionError("Real network forbidden"))
         self.network.start()
         self.addCleanup(self.network.stop)

@@ -12,7 +12,7 @@ from typing import Callable
 
 import requests
 
-from research_models import PaperRecord, make_paper, reconstruct_abstract, same_paper
+from research_models import PaperRecord, academic_reference, make_paper, reconstruct_abstract, same_paper
 from safety import clean_text, safe_url
 from tools import WebResearchContext
 from mcp_client import MCPError
@@ -176,8 +176,40 @@ class ScientificResearchContext(WebResearchContext):
     client: ScientificClient = field(default_factory=ScientificClient)
     papers: dict[str, PaperRecord] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
+    source_ids: dict[str, str] = field(default_factory=dict)
     scientific_cache: dict[tuple[str, str], dict] = field(default_factory=dict)
     asta_backend: Callable | None = None
+
+    def resolve_source(self, value: str) -> str | None:
+        """Resolve only retrieved evidence, stable IDs or unambiguous scholarly identities."""
+        direct = self.source_ids.get(value, self.aliases.get(value, value))
+        if direct in self.sources:
+            reference = academic_reference(value)
+            if value != direct and reference and reference[0] == "arxiv" and reference[2]:
+                if academic_reference(direct) != reference:
+                    return None
+            return direct
+        reference = academic_reference(value)
+        if reference is None:
+            return None
+        matches = set()
+        for url, paper in self.papers.items():
+            if url not in self.sources or not paper.abstract:
+                continue
+            original = academic_reference(url)
+            if reference[0] == "doi":
+                doi = paper.doi or (original[1] if original and original[0] == "doi" else None)
+                if reference[1] == doi:
+                    matches.add(url)
+            else:
+                arxiv_id = paper.arxiv_id or (original[1] if original and original[0] == "arxiv" else None)
+                if reference[1] != arxiv_id:
+                    continue
+                if reference[2] is not None and (
+                        not original or original[0] != "arxiv" or reference[2] != original[2]):
+                    continue
+                matches.add(url)
+        return next(iter(matches)) if len(matches) == 1 else None
 
     @property
     def asta_available(self) -> bool:
@@ -229,7 +261,15 @@ class ScientificResearchContext(WebResearchContext):
                     selected = paper
                 if selected.abstract:
                     self.sources[selected.url] = {"title": selected.title, "url": selected.url}
-                results.append(selected.evidence())
+                evidence = selected.evidence()
+                evidence["source_id"] = None
+                if selected.abstract:
+                    source_id = next((key for key, url in self.source_ids.items() if url == selected.url), None)
+                    if source_id is None:
+                        source_id = f"P{len(self.source_ids) + 1}"
+                        self.source_ids[source_id] = selected.url
+                    evidence["source_id"] = source_id
+                results.append(evidence)
             result = {"status": "ok" if results else "empty", "untrusted_data": True, "results": results}
             if not results:
                 self.errors.append(name + ": لا نتائج متاحة")

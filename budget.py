@@ -29,6 +29,8 @@ DAY_CAP = 300_000_000
 PROJECT_CAP = 5_000_000_000
 MAX_OUTPUT_TOKENS = 1200
 MAX_TURNS = 10
+# Conservative input bound; input + output stays below the model's 1,050,000 window.
+MAX_INPUT_BOUND = 200_000
 _THREAD_LOCK = threading.RLock()
 
 
@@ -139,7 +141,7 @@ class UsageLedger:
 
     def reserve(self, task: str, input_bound: int, output_bound: int) -> str:
         if (type(input_bound) is not int or type(output_bound) is not int
-                or not 0 < input_bound <= 100_000 or not 0 < output_bound <= MAX_OUTPUT_TOKENS):
+                or not 0 < input_bound <= MAX_INPUT_BOUND or not 0 < output_bound <= MAX_OUTPUT_TOKENS):
             raise BudgetStop("حدود الاستدعاء غير صالحة؛ لم يُرسل طلب.")
         # Reserve at cache-write rates, higher than ordinary input pricing.
         estimate = input_bound * 125 + output_bound * OUTPUT_RATE
@@ -217,7 +219,7 @@ class BudgetSession:
         # No tokenizer downloads: a conservative byte estimate plus protocol
         # allowance. This is application protection, not a provider guarantee.
         input_bound = 2 * len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) + 8192
-        if input_bound > 100_000:
+        if input_bound > MAX_INPUT_BOUND:
             raise BudgetStop("السياق أكبر من الحد الآمن لهذا الإصدار؛ اختصر المهمة.")
         reservation = self.ledger.reserve(self.task_id, input_bound, output)
         self.calls += 1

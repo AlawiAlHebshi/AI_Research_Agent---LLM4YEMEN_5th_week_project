@@ -2,11 +2,35 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 import re
 
 from pydantic import BaseModel, Field, field_validator
 
 from safety import clean_text, safe_url
+
+
+def academic_reference(value: str) -> tuple[str, str, str | None] | None:
+    """Recognize exact scholarly URL identities, retaining explicit arXiv versions."""
+    if safe_url(value) != value:
+        return None
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return None
+    if parsed.query or parsed.fragment or port is not None:
+        return None
+    if parsed.hostname in {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}:
+        match = re.fullmatch(r"/abs/((?:\d{4}\.\d{4,5}|[a-zA-Z.-]+/\d{7}))(v\d+)?", parsed.path)
+        if match:
+            return "arxiv", match[1], match[2]
+    if parsed.hostname in {"doi.org", "dx.doi.org"}:
+        doi = normalize_doi("doi:" + parsed.path.lstrip("/"))
+        if doi:
+            return "doi", doi, None
+    return None
 
 
 def normalize_doi(value: str | None) -> str | None:

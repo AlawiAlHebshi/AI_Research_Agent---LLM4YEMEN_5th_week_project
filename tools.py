@@ -69,6 +69,7 @@ class WebResearchContext:
     trace: Any = field(default_factory=NullTrace)
     use_exa: bool = EXA_DEFAULT
     mcp: MCPClient = field(default_factory=MCPClient)
+    previous_research: list[dict[str, Any]] = field(default_factory=list)
 
     def _lookup(self, name: str, query: str, backend: Callable) -> dict[str, Any]:
         self.calls.append(name)
