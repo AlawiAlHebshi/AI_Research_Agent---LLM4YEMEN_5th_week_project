@@ -15,7 +15,42 @@ connectivity/search check per process. It uses no OpenAI requests or paid Exa ke
 Asta requires its own optional `ASTA_TOOL_KEY`; absent that key, its connectivity
 is unverified. No paid research test is authorized by these settings.
 
-## Intentional cloud restrictions
+## Durable cloud budget (approved Supabase Free integration)
+
+The operator may connect a dedicated Supabase Free project using root Streamlit
+Secrets `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (the server-only `sb_secret_...`
+key). Enter values privately; no credentials are included in code or SQL.
+`requests` is already installed; the Supabase SDK is not required.
+
+Run `scripts/supabase_budget.sql` in the project's SQL Editor. Installation does
+not initialize or reset spending. Initialize once using the admin-only
+`ai_budget_private.seed(project_nanos, day, day_nanos, reserved_nanos, calls)`
+with a fresh snapshot of the existing local ledger. It includes outstanding
+reservations; repeating initialization is rejected. Do not independently run a
+paid local copy after cutover: any additional local usage must also be accounted
+for before further cloud spending. The local ledger remains unchanged.
+
+Before initialization, the application refuses all research. After checking the
+remote snapshot and confirming restricted Streamlit access, the operator enables
+`CLOUD_RESEARCH_ENABLED = "true"`. This permits user-submitted research, not
+automatic paid smoke tests. Such tests still require explicit approval.
+
+The database enforces the existing caps and maximum turns using a shared row
+lock and atomic reservation before a model call. Timeouts are not retried and
+uncertain reservations stay charged. There is no local fallback or automatic
+reinitialization. Outages or a paused Free project stop research safely.
+
+The ledger stores task IDs, dates, token counts and integer charges only. It is
+in a private schema with RLS and no direct application-role grants. Only the
+three fixed server budget functions are callable using the server secret.
+Questions, answers and OpenAI credentials are never sent to Supabase.
+
+Scientific/web research uses the existing engine and verification. Shared SQLite
+history remains disabled; results and download data belong to the Streamlit
+session. Saving the current session's report still requires explicit consent;
+server files and JSONL traces remain ephemeral. Download important reports.
+
+## Initial unconfigured cloud restrictions
 
 The default runtime is cloud-safe: paid research, private history, memory access,
 and real report saving are blocked. Local `.runtime/usage.json` and SQLite are
@@ -34,7 +69,5 @@ Arabic/English navigation and both research mode selectors can be checked
 without API calls. Scientific mode displays its abstracts/metadata-only scope.
 Any optional demo report is explicitly demo data, not live research evidence.
 
-Before enabling real cloud research, durable budget enforcement and authenticated
-data isolation require a separately approved implementation. SQLite research
-memory and local traces/reports are not guaranteed to persist through redeploys.
-Local runtime files must never be uploaded to restore cloud state manually.
+SQLite research memory and local traces/reports are not guaranteed to persist
+through redeploys. Do not upload private local runtime files to the host.

@@ -95,6 +95,8 @@ def result_view(result):
         st.warning(t("اكتمل البحث مع قيود: راجع نقص المصادر أو تعذّر الخدمات في الملخص."))
     if result.memory_status == "failed":
         st.warning(t("النتيجة متحققة، لكن تعذّر حفظها في ذاكرة SQLite."))
+    if gateway().cloud_mode:
+        st.caption(t("هذه النتيجة خاصة بالجلسة؛ نزّل التقرير للاحتفاظ به. لا تُحفظ في سجل أبحاث مشترك."))
     if not result.historical:
         metrics = st.columns(3)
         metrics[0].metric(t("المصادر"), len(result.sources))
@@ -189,8 +191,12 @@ def render():
         st.error(t(error.message))
         return
     if gateway().cloud_mode:
-        st.warning(t("وضع السحابة الآمن: البحث المدفوع والتاريخ الخاص مغلقان حتى تتوفر ميزانية دائمة وصلاحيات وصول مناسبة."))
-        st.caption(t("SQLite وملفات runtime مؤقتة على الاستضافة؛ لا نعتمد عليها لحماية الإنفاق بعد إعادة التشغيل."))
+        if gateway().cloud_budget_enabled:
+            st.info(t("البحث السحابي متصل بسجل ميزانية دائم. لا يبدأ أي طلب دون تسجيل حجز مالي ناجح."))
+            st.caption(t("التاريخ الخاص غير متاح على السحابة؛ النتائج خاصة بالجلسة وملفات التقارير على الخادم مؤقتة."))
+        else:
+            st.warning(t("وضع السحابة الآمن: البحث المدفوع والتاريخ الخاص مغلقان حتى تتوفر ميزانية دائمة وصلاحيات وصول مناسبة."))
+            st.caption(t("SQLite وملفات runtime مؤقتة على الاستضافة؛ لا نعتمد عليها لحماية الإنفاق بعد إعادة التشغيل."))
         st.caption(t("إعداد OpenAI متاح على الخادم.") if gateway().configured else t("OPENAI_API_KEY غير مهيّأ في بيئة العملية. لم يُرسل طلب."))
         if deployment_policy.cloud_probe_enabled():
             try:

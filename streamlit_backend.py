@@ -17,6 +17,7 @@ from scientific_tools import ScientificResearchContext
 from tools import WebResearchContext
 from tracing import NullTrace, TraceError, TraceWriter
 from deployment_policy import local_runtime
+from cloud_budget import SupabaseLedger
 
 
 class GatewayError(RuntimeError):
@@ -57,10 +58,20 @@ class BackendGateway:
         self.saved = {}
         self.last_usage = {}
         self.cloud_mode = not (local_runtime() if runtime_mode is None else runtime_mode == "local")
+        self._budget_ready = not self.cloud_mode
 
     @property
     def research_enabled(self):
-        return not self.cloud_mode and self.configured
+        return (not self.cloud_mode or self.cloud_budget_enabled and self._budget_ready) and self.configured
+
+    @property
+    def cloud_budget_enabled(self):
+        return (isinstance(self.ledger, SupabaseLedger)
+                and os.environ.get("CLOUD_RESEARCH_ENABLED", "").casefold() == "true")
+
+    def _require_research_budget(self):
+        if self.cloud_mode and not self.cloud_budget_enabled:
+            self._require_local_storage()
 
     def _require_local_storage(self):
         if self.cloud_mode:
@@ -73,10 +84,14 @@ class BackendGateway:
         return self.model_factory is not None or bool(os.environ.get("OPENAI_API_KEY"))
 
     def budget_status(self):
-        self._require_local_storage()
+        if self.cloud_mode and not isinstance(self.ledger, SupabaseLedger):
+            self._require_local_storage()
         try:
-            return self.ledger.snapshot()
+            status = self.ledger.snapshot()
+            self._budget_ready = True
+            return status
         except (BudgetStop, OSError, ValueError):
+            self._budget_ready = False
             raise GatewayError("budget_unavailable", "تعذّرت قراءة الميزانية؛ لا تصفّر سجل الاستخدام.") from None
 
     def _context(self, mode, trace):
@@ -89,7 +104,7 @@ class BackendGateway:
     def research(self, request: ResearchRequest, on_progress: Callable, *, request_id: str) -> BackendResult:
         # Cache failures too: reruns must never silently retry uncertain paid requests.
         with self.lock:
-            self._require_local_storage()
+            self._require_research_budget()
             if request_id in self.attempts:
                 cached_request, cached = self.attempts[request_id]
                 if cached_request != request:
@@ -124,7 +139,8 @@ class BackendGateway:
             os.environ["LANGSMITH_TRACING"] = "false"
             os.environ["LANGCHAIN_TRACING_V2"] = "false"
             model = self.model_factory(session) if self.model_factory else GuardedChatOpenAI.for_session(session)
-            outcome = run_research(request.query, model, context, memory=self.memory, task_id=trace.task_id)
+            outcome = run_research(request.query, model, context,
+                                   memory=None if self.cloud_mode else self.memory, task_id=trace.task_id)
             status = outcome.status
             if outcome.response is None:
                 raise GatewayError(status, outcome.reason)
@@ -179,7 +195,7 @@ class BackendGateway:
         return result
 
     def save_report(self, result_id, *, consent=False):
-        self._require_local_storage()
+        self._require_research_budget()
         with self.lock:
             if consent is not True:
                 return {"status": "declined"}
@@ -210,6 +226,9 @@ class BackendGateway:
 def create_gateway():
     """Called once per Streamlit session, not cached globally across browsers."""
     try:
-        return BackendGateway()
+        ledger = SupabaseLedger.from_environment() if not local_runtime() and SupabaseLedger.configured() else None
+        return BackendGateway(ledger=ledger)
+    except BudgetStop as error:
+        raise GatewayError(error.code, str(error)) from None
     except (StorageError, OSError, ValueError):
         raise GatewayError("memory_configuration", "مسار ذاكرة SQLite غير صالح؛ راجع إعدادات العملية.") from None

@@ -155,6 +155,13 @@ EN.update({
 })
 
 
+EN.update({
+    "البحث السحابي متصل بسجل ميزانية دائم. لا يبدأ أي طلب دون تسجيل حجز مالي ناجح.": "Cloud research uses a durable budget ledger. Every model request requires a confirmed spending reservation.",
+    "التاريخ الخاص غير متاح على السحابة؛ النتائج خاصة بالجلسة وملفات التقارير على الخادم مؤقتة.": "Private history is unavailable in the cloud. Results belong to this session; server report files are temporary.",
+    "هذه النتيجة خاصة بالجلسة؛ نزّل التقرير للاحتفاظ به. لا تُحفظ في سجل أبحاث مشترك.": "This result belongs to this session. Download the report to keep it; it is not stored in shared research history.",
+})
+
+
 def translate(text: str, language: str = "ar") -> str:
     """Translate owned UI copy, including fixed HTML fragments. Not user data."""
     if language != "en":

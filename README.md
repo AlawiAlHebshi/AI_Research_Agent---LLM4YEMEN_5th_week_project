@@ -2,7 +2,12 @@
 
 A local research assistant built with Python, LangChain, OpenAI, MCP search services, SQLite, and Streamlit. Ask a web or scientific question, receive a structured answer grounded in retrieved evidence, and optionally save or download the report.
 
-**Deployment URL: PENDING — this application has not been deployed.**
+**Deployment URL:** https://ai-research-llm4yemen.streamlit.app/ (restricted initial access).
+
+Cloud research requires the approved durable Supabase budget configuration;
+missing or unavailable budget storage blocks model requests. Cloud results are
+session-scoped; shared SQLite history is disabled. See
+[cloud setup](docs/community_cloud_deployment.md). Local operation is unchanged.
 
 This is a local, single-operator capstone application, not an authenticated multi-user service. Final offline validation passed **201 automated tests**. Real historical CLI traces are included below; no new paid OpenAI calls were made for final validation. Public release remains subject to the licensing and historical-secret-review limitations in the attribution section.
 
