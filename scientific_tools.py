@@ -15,6 +15,7 @@ import requests
 from research_models import PaperRecord, make_paper, reconstruct_abstract, same_paper
 from safety import clean_text, safe_url
 from tools import WebResearchContext
+from mcp_client import MCPError
 
 MAX_RESPONSE_BYTES = 1_000_000
 _ARXIV_LOCK = threading.Lock()
@@ -176,6 +177,23 @@ class ScientificResearchContext(WebResearchContext):
     papers: dict[str, PaperRecord] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
     scientific_cache: dict[tuple[str, str], dict] = field(default_factory=dict)
+    asta_backend: Callable | None = None
+
+    @property
+    def asta_available(self) -> bool:
+        return self.asta_backend is not None or self.mcp.asta_available
+
+    def search_asta(self, query: str) -> dict:
+        """Search Ai2 Asta MCP for metadata and abstracts only, never body snippets."""
+        self.mcp.trace = self.trace
+
+        def backend(value):
+            try:
+                return (self.asta_backend or self.mcp.asta_search)(value)
+            except MCPError as error:
+                raise ResearchAPIError(error.code) from None
+
+        return self._scientific_lookup("search_asta", query, backend)
 
     def _scientific_lookup(self, name: str, query: str, backend: Callable) -> dict:
         self.calls.append(name)
@@ -230,12 +248,17 @@ class ScientificResearchContext(WebResearchContext):
         return result
 
     def search_semantic_scholar(self, query: str) -> dict:
-        """Search scientific metadata/abstracts; on 429 use OpenAlex once."""
+        """On provider failure try configured Asta, then preserve OpenAlex recovery."""
         result = self._scientific_lookup("search_semantic_scholar", query, self.client.semantic_scholar)
-        if result.get("error_code") == "rate_limited":
-            self.trace.emit("recovery_started", tool="search_openalex", reason="semantic_scholar_429")
+        if result.get("error_code") in {"rate_limited", "timeout", "connection_failed", "service_unavailable", "access_denied"}:
+            if self.asta_available:
+                self.trace.emit("recovery_started", tool="search_asta", reason="semantic_scholar_unavailable")
+                asta = self.search_asta(query)
+                if asta.get("status") == "ok" and any(row.get("evidence_available") for row in asta["results"]):
+                    return {**result, "fallback": asta, "message": "Semantic Scholar unavailable; Asta abstracts retrieved."}
+            self.trace.emit("recovery_started", tool="search_openalex", reason="semantic_scholar_unavailable")
             fallback = self.search_openalex(query)
-            return {**result, "fallback": fallback, "message": "Semantic Scholar rate-limited; OpenAlex fallback attempted."}
+            return {**result, "fallback": fallback, "message": "Semantic Scholar unavailable; OpenAlex fallback attempted."}
         return result
 
     def search_openalex(self, query: str) -> dict:

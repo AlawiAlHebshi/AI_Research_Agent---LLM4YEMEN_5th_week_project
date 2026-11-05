@@ -14,9 +14,11 @@ from langchain_core.tools import StructuredTool
 
 from safety import clean_text, safe_url, validate_local_path
 from tracing import NullTrace
+from mcp_client import MCPClient, MCPError
 
 ROOT = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
+EXA_DEFAULT = True  # Final JSON search variant passed its free live probe on 2026-11-05.
 
 
 def public_search(query: str) -> list[dict[str, Any]]:
@@ -65,18 +67,20 @@ class WebResearchContext:
     final_content: str | None = None
     mode: str = "web"
     trace: Any = field(default_factory=NullTrace)
+    use_exa: bool = EXA_DEFAULT
+    mcp: MCPClient = field(default_factory=MCPClient)
 
     def _lookup(self, name: str, query: str, backend: Callable) -> dict[str, Any]:
         self.calls.append(name)
         self.trace.emit("tool_started", tool=name)
         if not isinstance(query, str) or not query.strip() or len(query) > 500:
             self.trace.emit("tool_error", tool=name, error_code="invalid_query")
-            return {"status": "error", "message": "Query must contain 1–500 characters."}
+            return {"status": "error", "error_code": "invalid_query", "message": "Query must contain 1–500 characters."}
         query = clean_text(query, 500)
         key = (name, query.casefold())
         if key in self.attempted:
             self.trace.emit("tool_error", tool=name, error_code="duplicate_query_blocked")
-            return {"status": "error", "message": "Already attempted; use another query or source."}
+            return {"status": "error", "error_code": "duplicate_query_blocked", "message": "Already attempted; use another query or source."}
         self.attempted.add(key)
         try:
             rows = backend(query)
@@ -98,9 +102,21 @@ class WebResearchContext:
                     "results": results}
         except Exception as error:
             LOGGER.warning("Public search failed: %s (%s)", name, type(error).__name__)
-            self.errors.append(name + ": تعذّر الوصول")
-            self.trace.emit("tool_error", tool=name, error_code="public_search_failed")
-            return {"status": "error", "message": "Public search failed; try the other web source."}
+            code = error.code if isinstance(error, MCPError) else "public_search_failed"
+            self.errors.append(name + ": " + code)
+            self.trace.emit("tool_error", tool=name, error_code=code)
+            return {"status": "error", "error_code": code,
+                    "message": "Public search failed; try the other web source."}
+
+    def exa_search(self, query: str) -> dict[str, Any]:
+        """Primary web search through free Exa MCP; DuckDuckGo is a bounded fallback."""
+        self.mcp.trace = self.trace
+        result = self._lookup("exa_search", query, self.mcp.exa_search)
+        if result.get("status") in {"error", "empty"} and result.get("error_code") not in {"invalid_query", "duplicate_query_blocked"}:
+            self.trace.emit("recovery_started", tool="duckduckgo_search", reason="exa_unavailable")
+            return {**result, "fallback": self.duckduckgo_search(query),
+                    "message": "Exa unavailable; DuckDuckGo fallback attempted. Wikipedia remains available."}
+        return result
 
     def duckduckgo_search(self, query: str) -> dict[str, Any]:
         """Return DuckDuckGo titles, snippets and URLs as untrusted evidence."""
@@ -156,8 +172,12 @@ def build_tools(context: WebResearchContext) -> list[StructuredTool]:
     if context.mode == "scientific":
         functions = (context.search_semantic_scholar, context.search_openalex, context.search_arxiv,
                      context.save_report_to_disk)
+        if context.asta_available:
+            functions = (context.search_asta, *functions)
     elif context.mode == "web":
         functions = (context.duckduckgo_search, context.wikipedia_lookup, context.save_report_to_disk)
+        if context.use_exa:
+            functions = (context.exa_search, *functions)
     else:
         raise ValueError("Invalid research mode")
     return [StructuredTool.from_function(func) for func in functions]

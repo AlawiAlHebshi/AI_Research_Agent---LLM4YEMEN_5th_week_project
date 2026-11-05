@@ -16,6 +16,7 @@ EVENTS = {
     "run_started", "run_finished", "research_finished", "model_reserved", "model_usage",
     "model_error", "budget_blocked", "tool_started", "tool_result", "tool_error",
     "tool_cache_hit", "recovery_started", "save_requested", "save_decision", "save_result",
+    "mcp_connected", "mcp_usage",
 }
 FIELDS = {
     "mode", "status", "reason", "tool", "error_code", "result_count", "source_count",

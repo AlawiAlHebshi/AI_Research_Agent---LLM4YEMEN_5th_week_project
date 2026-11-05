@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scientific_tools import ScientificClient, ScientificResearchContext
 from tracing import TraceWriter
+from mcp_client import MCPClient
 
 
 def main():
@@ -24,7 +25,7 @@ def main():
     trace = TraceWriter(kind="public_tool_probe")
     trace.emit("run_started", mode="scientific")
     client = ScientificClient(use_keys=False, max_attempts=1)
-    context = ScientificResearchContext(client=client, trace=trace)
+    context = ScientificResearchContext(client=client, trace=trace, mcp=MCPClient(use_keys=False))
     names = ["semantic_scholar", "openalex", "arxiv"] if args.source == "all" else [args.source]
     for name in names:
         result = getattr(context, "search_" + name)(args.query)

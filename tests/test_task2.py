@@ -152,7 +152,7 @@ class OfflineTests(unittest.TestCase):
 
     def test_save_is_queued_until_validated_final(self):
         context = self.context(confirm=Mock(return_value="y"))
-        tool = build_tools(context)[2]
+        tool = next(tool for tool in build_tools(context) if tool.name == "save_report_to_disk")
         result = tool.invoke({"content": "unverified", "filename": "research_report.txt"})
         self.assertEqual(result["status"], "pending")
         context.confirm.assert_not_called()

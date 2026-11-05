@@ -1,0 +1,3 @@
+# Standalone demo UI. Existing research dependencies are intentionally separate.
+# Validated on Python 3.14.7; installed entirely from the existing local pip cache.
+streamlit==1.65.0

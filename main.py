@@ -22,7 +22,7 @@ from openai import APIError
 
 from budget import BudgetSession, BudgetStop, GuardedChatOpenAI, UsageLedger
 from safety import clean_text, safe_url
-from tools import WebResearchContext, build_tools
+from tools import EXA_DEFAULT, WebResearchContext, build_tools
 from scientific_tools import ScientificResearchContext
 from tracing import TraceError, TraceWriter
 
@@ -50,7 +50,7 @@ class SafeConsoleCallback(StdOutCallbackHandler):
         pass
 
     def on_agent_action(self, action: Any, **kwargs: Any) -> None:
-        if action.tool in {"duckduckgo_search", "wikipedia_lookup", "save_report_to_disk",
+        if action.tool in {"exa_search", "search_asta", "duckduckgo_search", "wikipedia_lookup", "save_report_to_disk",
                            "search_semantic_scholar", "search_openalex", "search_arxiv"}:
             LOGGER.info("Tool requested: %s", action.tool)
 
@@ -123,10 +123,11 @@ abstracts. Synthesize only available abstracts. Never infer findings from a titl
 alone. Never claim full-paper review or confirmed peer review without metadata.
 Use numbered citations [1], [2] corresponding exactly to the order of distinct
 paper URLs in sources. Do not cite the same paper twice under different URLs.
-If semantic_scholar is rate limited, its OpenAlex fallback may already contain
+If semantic_scholar fails, its Asta/OpenAlex fallback may already contain
 results; use them. Distinguish preprints, missing/truncated abstracts and uncertainty.
 """ if context.mode == "scientific" else """You are a Web Research assistant.
-Use duckduckgo_search and/or wikipedia_lookup before answering. Do not claim to
+Use exa_search first when available; duckduckgo_search is its temporary fallback.
+Use wikipedia_lookup for supporting context. Search before answering. Do not claim to
 have read complete web pages; evidence is snippets and Wikipedia extracts.
 """)
     prompt = ChatPromptTemplate.from_messages([
@@ -199,6 +200,8 @@ def format_report(response: ResearchResponse, context: WebResearchContext | None
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="مساعد البحث — Web / Scientific Research")
     parser.add_argument("--mode", choices=["web", "scientific"], default="web")
+    parser.add_argument("--web-provider", choices=["exa", "duckduckgo"],
+                        default="exa" if EXA_DEFAULT else "duckduckgo", help="مزوّد بحث الويب؛ Exa هو الافتراضي بعد التحقق")
     parser.add_argument("--query", help="سؤال البحث؛ يُطلب تفاعليًا إن لم يُحدد")
     parser.add_argument("--save", metavar="FILENAME.txt", help="طلب حفظ بعد التأكيد")
     parser.add_argument("--verbose", action="store_true", help="عرض أسماء الأدوات فقط")
@@ -247,7 +250,10 @@ def _main(argv: list[str] | None = None) -> int:
         if not os.environ.get("OPENAI_API_KEY"):
             print("متغير OPENAI_API_KEY غير مُعدّ. أعدّه محليًا دون مشاركة قيمته.")
             return 2
-        context = ScientificResearchContext(trace=trace) if args.mode == "scientific" else WebResearchContext(trace=trace)
+        context = (ScientificResearchContext(trace=trace) if args.mode == "scientific"
+                   else WebResearchContext(trace=trace, use_exa=args.web_provider == "exa"))
+        if args.mode == "scientific" and not context.asta_available:
+            print("Asta غير مفعّل: ASTA_TOOL_KEY غير مُعدّ؛ تبقى المصادر العلمية الثلاثة متاحة.")
         if args.save:
             context.validate_filename(args.save)
         session = BudgetSession(UsageLedger(), trace.task_id, trace=trace, mode=args.mode)

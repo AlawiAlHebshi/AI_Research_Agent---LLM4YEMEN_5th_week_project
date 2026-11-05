@@ -209,8 +209,8 @@ class BudgetSession:
             raise BudgetStop("حد توكنات الإخراج غير آمن.")
         if any(not isinstance(message.get("content"), (str, type(None))) for message in payload.get("messages", [])):
             raise BudgetStop("هذا الإصدار يحسب تكلفة النص فقط.")
-        allowed = ({"search_semantic_scholar", "search_openalex", "search_arxiv", "save_report_to_disk"}
-                   if self.mode == "scientific" else {"duckduckgo_search", "wikipedia_lookup", "save_report_to_disk"})
+        allowed = ({"search_asta", "search_semantic_scholar", "search_openalex", "search_arxiv", "save_report_to_disk"}
+                   if self.mode == "scientific" else {"exa_search", "duckduckgo_search", "wikipedia_lookup", "save_report_to_disk"})
         for tool in payload.get("tools", []):
             if tool.get("type") != "function" or tool.get("function", {}).get("name") not in allowed:
                 raise BudgetStop("أداة غير معتمدة في طلب النموذج.")

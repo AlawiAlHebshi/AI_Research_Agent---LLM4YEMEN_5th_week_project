@@ -7,6 +7,8 @@ python-dotenv==1.2.3
 pydantic==2.13.5
 ddgs==9.16.1
 requests==2.34.2
+# Task 5 uses this existing requests installation for a bounded synchronous
+# MCP Streamable HTTP subset. No MCP SDK/Node dependencies are required.
 
 # Retained tutorial dependencies; the Task 2 application uses OpenAI directly.
 wikipedia==1.4.0
