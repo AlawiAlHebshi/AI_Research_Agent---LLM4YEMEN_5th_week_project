@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from deployment_policy import cloud_probe_enabled, free_exa_probe, initialize_secrets, local_runtime, cloud_configuration_status
+from mcp_client import MCPError
 from frontend.contracts import ResearchRequest
 from scripts.start_streamlit import prepare_environment
 from streamlit_backend import BackendGateway, GatewayError
@@ -99,6 +100,19 @@ class CloudDeploymentTests(unittest.TestCase):
                 self.assertEqual(result["result_count"], 1)
                 self.assertFalse(client.call_args.kwargs["use_keys"])
                 client.return_value.exa_search.assert_called_once()
+        finally:
+            free_exa_probe.cache_clear()
+
+    def test_free_probe_reports_safe_provider_failure_without_openai(self):
+        free_exa_probe.cache_clear()
+        try:
+            with patch("deployment_policy.MCPClient") as client, patch("deployment_policy.TraceWriter"):
+                client.return_value.exa_search.side_effect = MCPError("rate_limited")
+                client.return_value.requests = 1
+                result = free_exa_probe()
+                self.assertEqual(result["error_code"], "rate_limited")
+                self.assertEqual(result["openai_requests"], 0)
+                self.assertEqual(result["result_count"], 0)
         finally:
             free_exa_probe.cache_clear()
 

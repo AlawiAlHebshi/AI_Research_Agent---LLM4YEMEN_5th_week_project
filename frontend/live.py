@@ -205,6 +205,8 @@ def render():
             try:
                 probe = deployment_policy.free_exa_probe()
                 st.caption(f"Exa MCP: {probe['status']} · {probe['result_count']} · OpenAI requests: 0")
+                if probe.get("error_code"):
+                    st.caption(f"Exa MCP check: {probe['error_code']}")
             except Exception:
                 st.caption(t("تعذّر فحص اتصال MCP المجاني؛ لم يُشغّل النموذج."))
     with st.sidebar:
