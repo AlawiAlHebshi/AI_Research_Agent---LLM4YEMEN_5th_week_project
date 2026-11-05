@@ -12,6 +12,7 @@ from frontend.app import linked_summary, t, toggle_language, language
 from frontend.contracts import MODE_LABELS, ResearchRequest
 from frontend.demo import EXAMPLES
 from frontend.i18n import translate
+import deployment_policy
 
 PAGES = {"workspace": "مساحة البحث", "history": "الأبحاث السابقة", "reports": "التقارير", "about": "عن التطبيق"}
 
@@ -124,13 +125,15 @@ def workspace():
     with st.container(border=True, key="research_input"):
         st.radio(t("نمط البحث"), ("web", "scientific"), key="live_mode", horizontal=True,
                  format_func=lambda value, locale=language(): translate(MODE_LABELS[value], locale))
+        if st.session_state.live_mode == "scientific":
+            st.caption(t("البحث العلمي يعتمد على الملخصات والبيانات الوصفية فقط، دون قراءة الأوراق الكاملة."))
         st.text_area(t("ما الذي تريد استكشافه؟"), key="live_query", height=110)
         signature = hashlib.sha256((st.session_state.live_mode + "\n" + st.session_state.live_query.strip()).encode()).hexdigest()
         repeated = signature == st.session_state.live_last_signature
         repeat_key = "live_repeat_" + st.session_state.get("live_request_id", "new")
         repeat_consent = st.checkbox(t("أطلب إعادة بحث السؤال نفسه مع احتمال تكلفة جديدة"), key=repeat_key) if repeated else False
         submitted = st.button(t("ابدأ البحث"), key="start_research", type="primary", width="stretch",
-                              disabled=st.session_state.live_busy or not gateway().configured)
+                              disabled=st.session_state.live_busy or not gateway().research_enabled)
     if not gateway().configured:
         st.info(t("OPENAI_API_KEY غير مهيّأ في بيئة العملية. لم يُرسل طلب."))
     if submitted:
@@ -174,6 +177,7 @@ def workspace():
 def render():
     st.set_page_config(page_title="AI Research Assistant", page_icon="◈", layout="wide")
     initialize()
+    deployment_policy.initialize_secrets(st.secrets)
     st.markdown("<style>" + Path(__file__).with_name("style.css").read_text(encoding="utf-8") + "</style>", unsafe_allow_html=True)
     if language() == "en":
         st.markdown('<style>[data-testid="stMain"],[data-testid="stSidebar"]{direction:ltr;} '
@@ -184,6 +188,16 @@ def render():
     except backend.GatewayError as error:
         st.error(t(error.message))
         return
+    if gateway().cloud_mode:
+        st.warning(t("وضع السحابة الآمن: البحث المدفوع والتاريخ الخاص مغلقان حتى تتوفر ميزانية دائمة وصلاحيات وصول مناسبة."))
+        st.caption(t("SQLite وملفات runtime مؤقتة على الاستضافة؛ لا نعتمد عليها لحماية الإنفاق بعد إعادة التشغيل."))
+        st.caption(t("إعداد OpenAI متاح على الخادم.") if gateway().configured else t("OPENAI_API_KEY غير مهيّأ في بيئة العملية. لم يُرسل طلب."))
+        if deployment_policy.cloud_probe_enabled():
+            try:
+                probe = deployment_policy.free_exa_probe()
+                st.caption(f"Exa MCP: {probe['status']} · {probe['result_count']} · OpenAI requests: 0")
+            except Exception:
+                st.caption(t("تعذّر فحص اتصال MCP المجاني؛ لم يُشغّل النموذج."))
     with st.sidebar:
         st.markdown(t('<div class="brand"><div class="brand-mark">◈</div><div><strong>المساعد البحثي</strong><small>RESEARCH STUDIO</small></div></div>'), unsafe_allow_html=True)
         st.radio(t("التنقل"), tuple(PAGES), key="live_page",

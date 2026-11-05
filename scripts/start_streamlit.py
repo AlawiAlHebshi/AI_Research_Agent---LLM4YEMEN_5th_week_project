@@ -28,6 +28,7 @@ def prepare_environment(environment: Mapping[str, str], *, interactive: bool,
         result["OPENAI_API_KEY"] = credential
     result["LANGSMITH_TRACING"] = "false"
     result["LANGCHAIN_TRACING_V2"] = "false"
+    result["AI_RESEARCH_RUNTIME"] = "local"
     return result
 
 

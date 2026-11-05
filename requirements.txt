@@ -14,3 +14,6 @@ requests==2.34.2
 wikipedia==1.4.0
 duckduckgo-search==8.1.1
 langchain-anthropic==1.7.5
+
+# Community Cloud installs this root manifest; include the existing UI pins.
+-r requirements-ui.txt

@@ -16,6 +16,7 @@ from safety import clean_text
 from scientific_tools import ScientificResearchContext
 from tools import WebResearchContext
 from tracing import NullTrace, TraceError, TraceWriter
+from deployment_policy import local_runtime
 
 
 class GatewayError(RuntimeError):
@@ -44,7 +45,7 @@ class ProgressTrace:
 class BackendGateway:
     """One local operator namespace; this adapter provides no authentication."""
 
-    def __init__(self, *, memory=None, ledger=None, model_factory=None, context_factory=None, trace_factory=None):
+    def __init__(self, *, memory=None, ledger=None, model_factory=None, context_factory=None, trace_factory=None, runtime_mode=None):
         self.memory = memory if memory is not None else ResearchMemory()
         self.ledger = ledger if ledger is not None else UsageLedger()
         self.model_factory = model_factory
@@ -55,6 +56,16 @@ class BackendGateway:
         self.results = {}
         self.saved = {}
         self.last_usage = {}
+        self.cloud_mode = not (local_runtime() if runtime_mode is None else runtime_mode == "local")
+
+    @property
+    def research_enabled(self):
+        return not self.cloud_mode and self.configured
+
+    def _require_local_storage(self):
+        if self.cloud_mode:
+            raise GatewayError("durable_budget_unavailable",
+                "البحث المدفوع والتاريخ الخاص مغلقان على السحابة: التخزين المحلي مؤقت ولا يضمن استمرار سجل الميزانية.")
 
     @property
     def configured(self):
@@ -62,6 +73,7 @@ class BackendGateway:
         return self.model_factory is not None or bool(os.environ.get("OPENAI_API_KEY"))
 
     def budget_status(self):
+        self._require_local_storage()
         try:
             return self.ledger.snapshot()
         except (BudgetStop, OSError, ValueError):
@@ -77,6 +89,7 @@ class BackendGateway:
     def research(self, request: ResearchRequest, on_progress: Callable, *, request_id: str) -> BackendResult:
         # Cache failures too: reruns must never silently retry uncertain paid requests.
         with self.lock:
+            self._require_local_storage()
             if request_id in self.attempts:
                 cached_request, cached = self.attempts[request_id]
                 if cached_request != request:
@@ -135,12 +148,15 @@ class BackendGateway:
             trace.emit("run_finished", status=status, **self.last_usage)
 
     def history(self, query="", *, limit=5):
+        if self.cloud_mode:
+            return []
         try:
             return self.memory.search(query, limit=limit)
         except StorageError:
             raise GatewayError("memory_unavailable", "تعذّر استعراض ذاكرة SQLite بأمان.") from None
 
     def open_history(self, task_id):
+        self._require_local_storage()
         try:
             record = self.memory.get(task_id)
         except StorageError:
@@ -163,6 +179,7 @@ class BackendGateway:
         return result
 
     def save_report(self, result_id, *, consent=False):
+        self._require_local_storage()
         with self.lock:
             if consent is not True:
                 return {"status": "declined"}

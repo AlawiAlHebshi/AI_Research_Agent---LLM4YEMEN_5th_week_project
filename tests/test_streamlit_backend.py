@@ -37,6 +37,7 @@ class AdapterTests(unittest.TestCase):
                 wiki_backend=lambda query: baseline.ROWS, use_exa=False, **options)
 
         options = dict(memory=ResearchMemory(self.work / "ui.sqlite3"), ledger=self.ledger(),
+            runtime_mode="local",
             model_factory=lambda session: model.model_copy(update={"session": session}), context_factory=context_factory,
             trace_factory=lambda: TraceWriter(kind="offline_test", path=self.work / (uuid4().hex + ".jsonl")))
         options.update(kwargs)

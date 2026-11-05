@@ -103,6 +103,11 @@ EN = {
 
 
 EN.update({
+    "وضع السحابة الآمن: البحث المدفوع والتاريخ الخاص مغلقان حتى تتوفر ميزانية دائمة وصلاحيات وصول مناسبة.": "Safe cloud mode: paid research and private history are disabled until durable budget enforcement and suitable access controls are available.",
+    "SQLite وملفات runtime مؤقتة على الاستضافة؛ لا نعتمد عليها لحماية الإنفاق بعد إعادة التشغيل.": "Hosted SQLite and runtime files are ephemeral; they are not trusted to preserve spending safeguards across restarts.",
+    "إعداد OpenAI متاح على الخادم.": "OpenAI configuration is present on the server.",
+    "البحث المدفوع والتاريخ الخاص مغلقان على السحابة: التخزين المحلي مؤقت ولا يضمن استمرار سجل الميزانية.": "Paid research and private history are disabled in cloud mode: local storage is ephemeral and cannot preserve the budget ledger reliably.",
+    "تعذّر فحص اتصال MCP المجاني؛ لم يُشغّل النموذج.": "The free MCP connectivity check could not complete; the model was not run.",
     "الأبحاث السابقة": "Research history", "التقارير": "Reports", "عن التطبيق": "About the application",
     "وضع العرض التجريبي": "Demo preview mode", "أحدث الأبحاث المحلية": "Recent local research",
     "لا توجد أبحاث سابقة مطابقة.": "No matching previous research.",
