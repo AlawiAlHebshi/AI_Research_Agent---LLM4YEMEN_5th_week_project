@@ -1,412 +1,273 @@
-# AI Research Assistant — Task 5: Exa / Asta MCP
+# AI Research Assistant
 
-مساعد بحث ويب عبر CLI مبني تدريجيًا على مشروع
-[Tech With Tim](https://github.com/techwithtim/PythonAIAgentFromScratch).
-المرجع الأساسي للنطاق هو `agent_spec.md`. لا تغيّر هذه النسخة المواصفات المعتمدة.
+A local research assistant built with Python, LangChain, OpenAI, MCP search services, SQLite, and Streamlit. Ask a web or scientific question, receive a structured answer grounded in retrieved evidence, and optionally save or download the report.
 
-## الوظائف المتاحة
+**Deployment URL: PENDING — this application has not been deployed.**
 
-- بحث Exa MCP افتراضيًا، مع عناوين ومقتطفات وروابط؛ DuckDuckGo بديل مؤقت وWikipedia مصدر مساعد.
-- Asta MCP للبيانات الوصفية والملخصات عند إعداد `ASTA_TOOL_KEY`؛ يستفيد من التحقق وإزالة التكرار الحاليين.
-- نمط علمي عبر Semantic Scholar وOpenAlex وarXiv بالملخصات والبيانات الوصفية فقط.
-- توحيد الأوراق وإزالة التكرار ومراجع مرقمة ببياناتها المتاحة.
-- مخرجات Pydantic بالحقول `topic`, `summary`, `sources`, `tools_used`.
-- رفض الإجابة التي تستشهد بروابط لم تُرجعها الأدوات؛ توضيح نقص المصدرين.
-- حفظ `.txt` بطابع زمني داخل `reports/`، بعد تأكيد صريح منفصل.
-- `gpt-6-luna` عبر Chat Completions، مع `reasoning_effort="none"`.
-- ضوابط الجولات والتكلفة المحلية المبينة أدناه، ورسائل أخطاء لا تطبع الردود الخام.
+This is a local, single-operator capstone application, not an authenticated multi-user service. Final offline validation passed **201 automated tests**. Real historical CLI traces are included below; no new paid OpenAI calls were made for final validation. Public release remains subject to the licensing and historical-secret-review limitations in the attribution section.
 
-سجلات JSONL ودمج MCP متاحان. توجد واجهة Streamlit تجريبية مستقلة، موضحة أدناه؛ لم تُربط بالمحرك.
-ذاكرة SQLite للبحث متاحة في CLI؛ ربط الواجهة بالمحرك والنشر لم يُنفّذا بعد.
-راجع [دليل ذاكرة SQLite](docs/sqlite_memory.md) لأوامر الاسترجاع والاختبارات وحدود المرحلة الأولى.
-لا يقرأ المساعد صفحات كاملة أو ملفات محلية؛ يعتمد البحث على المقتطفات ومستخلصات Wikipedia.
-Wikipedia تختار العربية عند وجود أحرف عربية في استعلام الأداة، والإنجليزية خلاف ذلك.
+## Features
 
-## البيئة والحزم
+- **Web Research:** Exa MCP by default, DuckDuckGo fallback, and Wikipedia support.
+- **Scientific Research:** Semantic Scholar, OpenAlex, arXiv, and optional Ai2 Asta MCP.
+- Structured `topic`, `summary`, `sources`, and `tools_used` output.
+- Retrieved-reference validation, scientific paper deduplication, DOI/arXiv identity checks, and numbered citations.
+- Persistent SQLite research snapshots with ID lookup, text search, UTC dates, and honest `degraded` status.
+- Arabic/English Streamlit controls, clickable references, progress stages, history, consent-controlled report saving, and TXT downloads.
+- Persistent spending reservations, measured token accounting, maximum-turn enforcement, and private JSONL traces.
+- An explicit, isolated **DEMO** preview that makes no research requests.
 
-البيئة التي جرى التحقق منها: Python 3.14.7، Windows x64. الحد الأدنى المستهدف Python 3.11،
-لكن تشغيل هذه المجموعة على إصدارات أخرى لم يُختبر. تستخدم المهمات 2 و3 و4 الحزم المثبتة مسبقًا؛
-لم تُثبّت أو تُحدّث أي حزم خلالها، ولا خلال المهمة 5. يستخدم MCP مكتبة `requests` الموجودة.
+Scientific answers use **available abstracts and metadata only**. Web answers use search snippets and Wikipedia extracts. The application does not read full papers, ingest PDFs, build embeddings, or implement vector RAG.
 
-`requirements.txt` يثبت إصدارات الاعتماديات المباشرة الموجودة محليًا.
-البيئة `.venv` وcache ومجلد wheel المحلي من تجهيز المهمة الأولى مستبعدة من Git.
-لا تنسخ `site-packages` من مشروع آخر، ولا تستخدم ترقية شاملة.
+## Architecture
 
-عند استخدام البيئة المجهزة لا تحتاج أمر تثبيت. للتحقق من سلامتها:
+```mermaid
+flowchart TD
+    CLI[CLI main.py] --> Engine[Existing run_research engine]
+    UI[Streamlit interface] --> Adapter[streamlit_backend.py]
+    Adapter --> Engine
+    Adapter --> History[SQLite history reads]
+    Engine --> Guard[GuardedChatOpenAI and usage ledger]
+    Engine --> Tools[Approved research tools and MCP client]
+    Engine --> Validation[Schema and retrieved-source validation]
+    Validation --> Memory[Validated SQLite snapshot]
+    Validation --> Result[Result and report preview]
+    Result --> Approval[Explicit user consent]
+    Approval --> Reports[Protected reports folder]
+```
+
+| Component | Purpose |
+|---|---|
+| `main.py` | Shared agent loop, structured validation, CLI, report formatting |
+| `budget.py` | Fixed model configuration, reservations, caps, usage settlement, file locking |
+| `tools.py` | Web research and protected report writing |
+| `scientific_tools.py`, `research_models.py` | Academic adapters, abstracts, paper identity and stable source IDs |
+| `mcp_client.py` | Bounded synchronous remote MCP client |
+| `memory.py` | SQLite snapshots and bounded historical retrieval |
+| `tracing.py`, `safety.py` | Allowlisted audit records, redaction and path/URL boundaries |
+| `streamlit_backend.py` | Session-scoped adapter reusing the existing engine |
+| `frontend/live.py`, `frontend/app.py` | Connected interface and separate demo presentation |
+| `scripts/start_streamlit.py` | Secure local startup using process credentials or masked terminal input |
+
+## Tools and MCP transport
+
+| Agent-facing tool | Provider / operation |
+|---|---|
+| `exa_search` | Remote Exa MCP `web_search_advanced_exa`; anonymous search, five results and highlights |
+| `duckduckgo_search` | Existing DuckDuckGo implementation; retained as fallback |
+| `wikipedia_lookup` | Public Wikipedia extracts |
+| `search_semantic_scholar` | Semantic Scholar metadata and abstracts |
+| `search_openalex` | OpenAlex metadata and available abstracts |
+| `search_arxiv` | arXiv metadata and abstracts |
+| `search_asta` | Optional Ai2 Asta MCP `search_papers_by_relevance` |
+| `save_report_to_disk` | Local protected writer; genuine human approval required |
+
+The MCP implementation is a small **Streamable HTTP subset** using fixed HTTPS endpoints, JSON-RPC POST requests, and bounded JSON/SSE responses. It initializes the connection, sends the initialized notification, discovers tools, and invokes an allowlisted tool. It is not a local stdio server or a full MCP SDK. No Node or MCP SDK installation is required. Discovery checks the approved remote tool name; the client constructs fixed arguments rather than adopting server-provided tool descriptions as agent instructions.
+
+Asta is not exposed to the agent unless `ASTA_TOOL_KEY` is configured. Semantic Scholar failure can recover through Asta when configured, then OpenAlex. Exa failure can try DuckDuckGo. A fallback does not guarantee that another provider will be available.
+
+## Prerequisites and Windows setup
+
+- Python **3.11+** is the intended baseline; the existing Windows environment was tested with **Python 3.14.7** and Streamlit **1.65.0**. Other Python/platform combinations were not validated in this final pass.
+- OpenAI API access to the configured `gpt-6-luna` model for real research.
+- Network access for real research providers. Viewing stored history does not require model access.
+
+Use the existing `.venv` when available. Check it without downloading anything:
 
 ```powershell
 .\.venv\Scripts\python.exe -I -m pip --isolated --disable-pip-version-check check
 ```
 
-إذا احتجت إعادة تجهيز البيئة، استخدم أولًا wheel المحلي والإصدارات الموجودة،
-ولا تسمح بالتنزيل إلا بعد تحديد الحزم الناقصة. wheels الخاصة بـ`cp314` لا تناسب كل إصدارات Python.
-
-## إعداد المفتاح والتشغيل
-
-أعدّ `OPENAI_API_KEY` بنفسك في متغيرات البيئة أو في `.env` محلي مستبعد من Git.
-يحتوي `.env.example` على اسم المتغير وقيمة توضيحية فقط؛ استبدلها محليًا.
-لا ترسل المفتاح إلى المحادثة ولا تضعه في أوامر مسجلة أو في Git.
-الـCLI يحمّل `.env` عند تشغيل مهمة فعلية فقط، ويحافظ على متغير البيئة الموجود.
-استيراد الملفات، عرض المساعدة والاختبارات لا يقرأ `.env`.
-
-الأوامر التالية من مجلد المشروع. عرض المساعدة لا يجري بحثًا أو استدعاء نموذج:
+For a fresh checkout only, create an environment and install the pinned dependency files:
 
 ```powershell
-.\.venv\Scripts\python.exe -B main.py --help
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-ui.txt
 ```
 
-التشغيل التالي يستخدم الإنترنت ورصيد OpenAI وفق الحدود المحلية:
-
-```powershell
-.\.venv\Scripts\python.exe -B main.py --mode web --query "بحث ويب: ما هو بروتوكول MCP وأهم استخداماته؟"
-```
-
-لإدخال السؤال تفاعليًا:
-
-```powershell
-.\.venv\Scripts\python.exe -B main.py
-```
-
-لطلب الحفظ بعد عرض التقرير والتحقق منه:
-
-```powershell
-.\.venv\Scripts\python.exe -B main.py --mode web --query "بحث ويب: استخدامات الذكاء الاصطناعي في التعليم" --save research_report.txt
-```
-
-اكتب `y` أو `yes` أو `نعم` للتأكيد. أي جواب آخر أو إلغاء الإدخال يرفض الحفظ.
-اسم الملف المطلوب يجب أن يكون اسمًا بسيطًا ينتهي بـ`.txt` ويستخدم أحرفًا إنجليزية وأرقامًا و`_` و`-`.
-تُضاف إليه UTC timestamp ومعرّف لمنع الاستبدال. لا تُقبل المسارات أو أسماء Windows المحجوزة
-أو symbolic links أو junctions. لا يُنشأ مجلد التقرير عند الرفض.
-
-إذا طلب النموذج أداة الحفظ أثناء البحث، يُحفظ طلب الاسم في الذاكرة فقط؛ ثم يطلب CLI التأكيد
-بعد التحقق من الإجابة. نص النموذج لا يستطيع منح الموافقة أو استبدال محتوى التقرير المتحقق.
-`tools_used` يعكس أسماء الأدوات التي استُدعيت أثناء البحث، بما فيها المحاولات الفاشلة وطلب الحفظ المؤجل.
-
-أضف `--verbose` لعرض أسماء الأدوات وأحداث مختصرة. بقي `verbose=True` في `AgentExecutor`
-كما في الدرس، مع callback بديل لا يعرض prompt أو الاستجابة الخام أو محتوى نتائج الأدوات.
-تُعطّل LangSmith tracing الخارجية داخل CLI.
-يضبط CLI الإخراج على UTF-8؛ استخدم Windows Terminal أو VS Code Terminal بخط يدعم العربية.
-
-`--mode scientific` يتيح الأدوات العلمية الثلاث والحفظ فقط؛ أدوات الويب معزولة عنه.
-رموز الخروج: `0` نجاح (ويشمل رفض الحفظ)، `1` فشل المهمة/الحفظ، `2` إدخال أو إعداد غير صالح، `130` إلغاء المستخدم.
-
-## ضوابط التكلفة وحدودها
-
-قبل **كل** استدعاء، بما فيه جولات الأدوات، تُفحص الحدود التالية:
-
-| المستوى | الحد |
-|---|---|
-| مهمة واحدة | $0.03 |
-| اليوم داخل التطبيق (UTC+3) | $0.30 |
-| إجمالي تجارب التطبيق | $5.00 |
-| استدعاءات النموذج في المهمة | 10 |
-| الإخراج لكل استدعاء | 1200 توكن |
-
-سجل `.runtime/usage.json` يحتفظ بحجوزات التكلفة والاستهلاك بين مرات التشغيل، دون الأسئلة أو الردود أو المفاتيح.
-يُقفل عند التحديث لمنع حجز ميزانية مشتركة بالتزامن. إذا كان السجل تالفًا يتوقف البرنامج، ولا يعيد تصفيره.
-**لا تحذف السجل أو تعدّل قيمه لإعادة ضبط الحدود.** لا يشمل هذا السجل استخدام المفتاح خارج التطبيق
-أو تجارب تاريخية لم تُسجل فيه.
-
-يُستخدم تقدير متحفظ للإدخال: ضعفا عدد بايتات JSON بترميز UTF-8، مع 8192 توكن إضافية لهوامش البروتوكول.
-يشمل التقدير الرسائل ومخططات الأدوات والسياق المتكرر. إذا تجاوز 100,000 توكن تقديري يُرفض الطلب.
-هذا يتجنب تنزيل ملفات tokenizer، لكنه تقدير محلي وليس ضمانًا من المزوّد.
-يُحجز الإدخال بسعر cache-write الأعلى ($0.125 لكل مليون)، ويُحجز أقصى إخراج.
-
-بعد الرد تُحسب التكلفة من أعداد التوكنات التي أعادها المزوّد: $0.10/مليون إدخال، $0.01/مليون cached input،
-و$0.50/مليون إخراج. الإعداد مقصور على النموذج المعتمد، endpoint العادي وservice tier الافتراضي،
-دون أدوات OpenAI المدفوعة المدمجة أو بث أو تنفيذ غير متزامن. الأسعار راجعت بتاريخ 2026-11-04 من
-[وثائق النموذج الرسمية](https://developers.openai.com/api/docs/models/gpt-6-luna).
-هذه تكلفة محسوبة من الاستهلاك، وليست قراءة لفاتورة الحساب. يجب مراجعة الأسعار إذا تغيرت.
-
-محاولات الإعادة التلقائية معطلة. عند timeout أو انقطاع التنفيذ أو غياب بيانات الاستخدام، يبقى
-تقدير الاستدعاء محجوزًا لأن الخادم ربما عالجه. الرسالة النهائية تميّز التكلفة المقاسة عن الحجوزات غير المسواة.
-لا تعد تشغيل المهمة تلقائيًا بعد فشل الاتصال.
-
-هذه حدود داخل التطبيق فقط، ولا تمنع استخدام المفتاح خارجه أو تغير التسعير أو خطأ تقدير داخل استدعاء جارٍ.
-`max_execution_time=180` يُفحص بين خطوات الوكيل؛ ليس مؤقتًا يقطع اتصالًا جاريًا قسرًا.
-لكل اتصال نموذج مهلة 30 ثانية، ولأدوات البحث مهلات مستقلة ومحاولة تطبيق واحدة لكل استعلام متكرر.
-
-## الاختبارات المحلية
-
-```powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-```
-
-تستخدم الاختبارات LangChain وOpenAI SDK المثبتين، مع `httpx.MockTransport` ونتائج بحث وهمية،
-وتحظر اتصالات socket. لا تستخدم مفتاحًا حقيقيًا أو تقرأ `.env`.
-تشمل خمسة أسئلة، نجاح البحث والتعافي من خطأ مصدر، نقص المصادر، رفض المصادر المختلقة، JSON غير صالح،
-الحفظ بالموافقة والرفض والإلغاء، المسارات غير المسموحة، حدود الجولات والميزانية واستمرار السجل بعد إعادة فتحه.
-تختبر كذلك أن تعليمات مصدر غير موثوق لا تستطيع منح إذن الحفظ.
-
-آثار الاختبارات تبقى في `.runtime/tests/` و`reports/.tests/`، ولا تُحذف تلقائيًا.
-استهلاك HTTP الوهمي ليس استخدام OpenAI حقيقيًا، وملفات الاختبار ليست سجلات نجاح حي للكابستون.
-
-لم يُجرَ اختبار OpenAI حي من بيئة التنفيذ أثناء تطوير المهمات 3 و4 لأن المفتاح لم يكن متاحًا في البيئة الموروثة،
-ولم تُقرأ `.env` لتجاوزه. تجارب المستخدم السابقة أثبتت تشغيل النموذج وWikipedia والحفظ بعد الموافقة.
-فُحصت الأدوات العلمية حيًا دون مفاتيح: Semantic Scholar أعاد 429، ثم نجح OpenAlex كبديل، ونجح arXiv.
-هذا فحص أدوات حقيقي وليس مهمة تلخيص كاملة بالنموذج.
-
-## حدود التحقق من الإجابات
-
-التحقق يثبت أن روابط الاستشهادات أُرجعت من الأدوات، ويمنع أسماء أدوات مختلقة في `tools_used`.
-لا يثبت تلقائيًا أن كل جملة أو اقتباس مدعوم دلاليًا بالمقتطفات؛ راجع المصادر عند الحاجة.
-تنقية النص تحجب أنماط أسرار شائعة وتحذف محارف التحكم، وليست كاشفًا شاملًا لكل أنواع البيانات الحساسة.
-لا تدخل بيانات سرية في أسئلة البحث العام.
-
-## دليل الاختبار الكامل
-
-نفّذ الأوامر التالية من مجلد المشروع. استخدم البيئة الموجودة؛ لا حاجة إلى تنزيل أو ترقية حزم.
-احتفظ بسجل `.runtime/usage.json` والتقارير السابقة دون حذف أو تصفير.
-
-### 1. الفحص المحلي دون الإنترنت أو المفاتيح
-
-```powershell
-.\.venv\Scripts\python.exe --version
-.\.venv\Scripts\python.exe -I -m pip --isolated --disable-pip-version-check check
-.\.venv\Scripts\python.exe -B main.py --help
-.\.venv\Scripts\python.exe -B main.py --budget-status
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-```
-
-المتوقع: `No broken requirements found`، ومساعدة عربية، وحالة الميزانية بالدولار، ثم `OK` للاختبارات.
-`--budget-status` لا يقرأ `.env` أو يستدعي النموذج. الفحوص تستخدم نقل HTTP ونتائج بحث وهمية موسومة بوضوح.
-رسائل `WARNING` في حالات الفشل المقصودة لا تعني إخفاق الاختبار؛ النتيجة النهائية يجب أن تكون `OK`.
-
-لتشغيل مجموعة محددة:
-
-```powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -p test_scientific.py -v
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -p test_tracing_budget.py -v
-```
-
-تشمل الاختبارات العلمية خمسة موضوعات وفشل المصادر والملخصات والتكرار والحقول الناقصة وXML والاستشهادات والحفظ.
-وتشمل اختبارات الميزانية عمليتين متزامنتين وسجلًا مفقودًا/تالفًا وانقطاع الاستدعاء وغياب بيانات الاستخدام.
-سجلات هذه الحالات معزولة داخل `.runtime/tests`؛ لا تمس سجل إنفاقك الحقيقي.
-
-### 2. فحص المصادر العلمية دون أي طلب OpenAI
-
-الأمر التالي يستخدم الإنترنت لطلبات metadata صغيرة فقط، ولا يقرأ `.env` ولا يستخدم المفاتيح:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/check_scientific_sources.py
-```
-
-لفحص مصدر واحد وتقليل الطلبات:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/check_scientific_sources.py --source openalex --query "retrieval augmented generation education"
-```
-
-المتوقع `ok` عند النجاح، أو سبب مثل `rate_limited`, `timeout`, `access_denied`, `connection_failed`.
-عند 429 من Semantic Scholar تُجرب OpenAlex تلقائيًا؛ تكرار الاستعلام نفسه يستخدم النتيجة المخزنة داخل المهمة.
-يطبع الفحص عدد الطلبات والبايتات و`openai_requests: 0` ومكان السجل.
-المحاولة واحدة لكل endpoint في هذا الفحص، ولا تُنزل أوراق أو PDF. السجل موسوم `public_tool_probe`.
-
-### 3. إعداد التشغيل الحقيقي
-
-تأكد بنفسك من صحة `OPENAI_API_KEY` في البيئة أو `.env` المحلي الموجود. لا تشارك قيمته.
-المفاتيح العلمية اختيارية: `SEMANTIC_SCHOLAR_API_KEY` و`OPENALEX_API_KEY` إن أعددتها محليًا.
-يمكن البدء دونها مع قبول قيود الوصول ومعدل الطلبات. لا تنشئ اشتراكات أكاديمية مدفوعة لهذا المشروع.
-
-الأوامر في الخطوات التالية تستدعي OpenAI وقد تستخدم أكثر من استدعاء واحد للمهمة، بحد أقصى 10،
-وتخضع للسقوف $0.03 للمهمة و$0.30 لليوم و$5.00 للإجمالي. افحص `--budget-status` قبل التجارب.
-
-### 4. تشغيل البحث العلمي
-
-```powershell
-.\.venv\Scripts\python.exe -B main.py --mode scientific --query "بحث علمي: ابحث عن تطبيقات RAG في التعليم وقارن النتائج والقيود اعتمادًا على الملخصات" --verbose
-```
-
-تحقق من ظهور:
-
-- أدوات علمية فقط، ثم مراجع مرقمة `[1]`, `[2]`.
-- عنوان كل ورقة ومؤلفيها وسنتها ورابطها، بحسب metadata المتاحة.
-- بيان أن الملخصات فقط قُرئت، وتوضيح النقص إذا توفر مصدر واحد.
-- إشارة لتعثر Semantic Scholar إذا حدث، واستخدام OpenAlex عند 429.
-- ملخص الاستهلاك ومكان ملف `.runtime/traces/<task_id>.jsonl`.
-
-تُطلب حتى 5 نتائج لكل طلب، وتُحتفظ حتى 10 أوراق مختلفة داخل المهمة،
-وتُرسل للنموذج حتى 2200 حرف من كل abstract مع علم يوضح الاختصار. بيانات بلا ملخص لا تُستخدم كدليل على النتائج،
-ولا تزاحم الأوراق التي تحتوي ملخصًا عند امتلاء العدد. يُحفظ حتى 20 اسم مؤلف لكل ورقة.
-arXiv مصدر نسخ أولية؛ لا يُفترض أن كل ورقة محكّمة.
-
-عند فشل المصادر كلها أو غياب الأدلة قد تتوقف المهمة دون تقرير. تقدير السياق المتحفظ قد يوقف المهمة
-قبل عشر جولات عند كثرة الملخصات؛ اختصر السؤال بدل زيادة الحدود.
-
-### 5. اختبار الحفظ والرفض
-
-```powershell
-.\.venv\Scripts\python.exe -B main.py --mode scientific --query "بحث علمي: تطبيقات RAG في التعليم" --save scientific_report.txt
-```
-
-اكتب `n` لاختبار الرفض: تُعرض النتيجة دون إنشاء تقرير لهذه المهمة.
-في تجربة أخرى، إن أردت اختبار الموافقة ضمن رصيدك، اكتب `y`: يُعرض اسم الملف الناتج داخل `reports`.
-كل إعادة للأمر مهمة جديدة قد تستهلك رصيدًا؛ اختبارات الموافقة والرفض offline تغطي السلوكين دون كلفة.
-
-لعرض التقارير:
-
-```powershell
-Get-ChildItem -LiteralPath reports -File -Filter '*.txt' | Select-Object Name,Length
-```
-
-اختبار المسارات الممنوعة مغطى offline. لا تطلب الكتابة خارج مجلد التقارير.
-
-### 6. اختبار الويب والمشكلة المؤجلة
-
-```powershell
-.\.venv\Scripts\python.exe -B main.py --mode web --query "بحث ويب: ما هو بروتوكول MCP وأهم استخداماته؟"
-```
-
-Exa هو الافتراضي الآن بعد نجاح فحص MCP حي. يمكن اختيار البديل صراحة عبر `--web-provider duckduckgo`.
-مشكلة DuckDuckGo المعروفة ما زالت مؤجلة. عند استخدامه قد يظهر `DDGSException` ثم ينجح البحث عبر Wikipedia،
-وتكون النتيجة `degraded` مع بيان نقص الأدلة. نجاح ويكيبيديا لا يعني إصلاح DuckDuckGo.
-
-## المهمة 5: دليل MCP والنتائج الفعلية
-
-راجع [دليل Exa وAsta](docs/task5_mcp.md) لإرشادات الإعداد والاختبارات والسجلات والقيود.
-يتضمن `scripts/check_mcp_sources.py` فحصًا منفصلًا لا يقرأ `.env` ولا يستدعي OpenAI:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/check_mcp_sources.py --source exa
-.\.venv\Scripts\python.exe -B scripts/check_mcp_sources.py --source asta --query "retrieval augmented generation education"
-```
-
-Exa: فحص النسخة النهائية حيًا ناجح، 5 نتائج، 4 طلبات HTTP، 20,610 بايت. لا يحتاج مفتاحًا في هذا الربط.
-Asta: ربط واختبارات offline؛ الاختبار الحي محجوب بغياب `ASTA_TOOL_KEY` في البيئة الموروثة.
-أعدّ المتغير بنفسك دون مشاركة قيمته؛ فحص MCP لا يحمّل `.env`، ولا يرسل أي طلب Asta عند غيابه.
-الـCLI الذي يشغله المستخدم يواصل تحميل `.env` كما سابقًا، وقد يجد فيه المتغير إن أعددته بنفسك.
-إذا تعثرت Semantic Scholar، يُجرّب Asta إن كان معدًا، ثم OpenAlex عند الحاجة.
-تبقى حدود الميزانية والجولات والتحقق من المصادر وطلب موافقة الحفظ فعالة. لا خدمات مدفوعة ولا SQLite في هذه المهمة.
-
-### 7. فحص JSONL وأدلة التسليم
-
-يُطبع مسار سجل كل مهمة في نهاية التنفيذ. اعرض الملفات المتاحة:
-
-```powershell
-Get-ChildItem -LiteralPath .runtime/traces -File -Filter '*.jsonl' | Sort-Object LastWriteTime -Descending | Select-Object -First 10 Name,Length
-```
-
-لاستعراض سجل بعينه، استبدل `TASK_ID` بالاسم الذي طبعه البرنامج:
-
-```powershell
-Get-Content -LiteralPath '.runtime/traces/TASK_ID.jsonl' | ForEach-Object { $_ | ConvertFrom-Json } | Select-Object sequence,event,data
-```
-
-السجل يحتوي على الأحداث والحجوزات والتوكنات والمصادر وقرار الحفظ وسبب التوقف، دون الأسئلة أو الردود الخام.
-تقسم `cost_nanos` و`estimated_nanos` و`reserved_nanos` على مليار للحصول على الدولار.
-سجل الميزانية هو المرجع المالي وJSONL للتدقيق؛ لا تجمعهما كأنهما استهلاكان مستقلان.
-
-| نوع التنفيذ | المعنى |
-|---|---|
-| `cli` | تشغيل حقيقي للتطبيق، وقد يفشل قبل إرسال أي طلب |
-| `public_tool_probe` | اتصال حقيقي بالمصادر دون تلخيص بالنموذج |
-| `offline_test` | بيانات ونقل HTTP وهميان لا يُقدّمان كدليل حي |
-
-لتصدير الأدلة المنقحة، استبدل `TASK_ID` بسجل مناسب وشغّل **الأمر الموافق لنتيجته فقط**:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/export_trace.py '.runtime/traces/TASK_ID.jsonl' success_1
-.\.venv\Scripts\python.exe -B scripts/export_trace.py '.runtime/traces/TASK_ID.jsonl' near_failure_recovery
-.\.venv\Scripts\python.exe -B scripts/export_trace.py '.runtime/traces/TASK_ID.jsonl' explicit_failure
-```
-
-- `success_1`: تشغيل مكتمل فيه استخدام مقاس للنموذج ومصادر مسترجعة، دون خطأ أداة.
-- `near_failure_recovery`: تشغيل مكتمل فيه خطأ أداة ثم نتيجة مدعومة بمصادر واستخدام مقاس للنموذج.
-- `explicit_failure`: تشغيل حقيقي فشل بسبب واضح، وقد يُرفض قبل إرسال طلب.
-
-الأداة ترفض سجلات المحاكاة وفحص الأدوات، والسجل غير المكتمل والتصنيف غير الموافق للنتيجة،
-واستبدال ملف دليل موجود. التصدير محلي ولا يرفع إلى GitHub.
-
-الدليل الموجود `traces/explicit_failure.jsonl` ناتج عن إدخال فارغ حقيقي، وبه صفر طلبات نموذج؛
-ليس فشل خدمة بحث أو نفاد رصيد. لم تُنشأ ملفات نجاح وتعافٍ كامل للوكيل من fixtures أو فحص الأدوات.
-أنشئها من تجارب CLI حقيقية عند توفر الرصيد، دون افتعال 429 بإغراق الخدمات.
-
-### 8. حالات إضافية ومعيار النجاح
-
-اختبر بالتدريج ضمن رصيدك: سؤال MCP، بحث التعليم مع رفض الحفظ، بحث RAG العلمي،
-موضوعًا ضيقًا قليل النتائج، وسؤالًا قد تظهر أوراقه في أكثر من قاعدة.
-راجع روابط الأوراق والملخصات؛ اختبارات fixtures لا تثبت صحة الاستنتاجات الدلالية.
-اختبارات حدود الإنفاق والفشل والتزامن تُنفّذ offline بدل إنفاق الرصيد للوصول إلى السقف.
-
-إذا تعثر الاتصال فلا تعاود التشغيل تلقائيًا. اقرأ السبب وافحص الميزانية والحجوزات.
-عند تلف السجل أو فقده بعد إنشائه، احتفظ بالملفات كما هي؛ التطبيق لا يعيد تصفير البيانات.
-
-## واجهة Streamlit التجريبية — Frontend Only
-
-واجهة عربية مستقلة لمراجعة التصميم قبل ربط المحرك. لا تستورد `main.py` أو MCP أو OpenAI، ولا تحمل `.env` أو تقرأ تقاريرك أو سجل إنفاقك.
-لا يوجد خيار تفعيل بحث حقيقي مخفي أو اعتماد على متغير بيئة لتغييره. جميع النتائج والمصادر والأدوات وحالات التقدم موسومة بوضوح كتجريبية.
-
-### التشغيل المحلي
-
-من مجلد المشروع وبالبيئة الموجودة، دون إعادة تثبيت:
-
-```powershell
-.\.venv\Scripts\python.exe -B -m streamlit run streamlit_app.py
-```
-
-افتح `http://127.0.0.1:8501/`. الإعدادات في `.streamlit/config.toml` تقصر الاستماع على الجهاز المحلي وتعطل إحصاءات الاستخدام ومراقبة الملفات. زر النشر مخفي، ويُظهر Streamlit الفهرس تلقائيًا بحسب عرض الشاشة مع زر فتحه وإغلاقه.
-إذا كان المنفذ مشغولًا استخدم `--server.port 8502` وافتح المنفذ الجديد. أوقف الخادم بـ`Ctrl+C` في طرفيته.
-مراقبة الملفات معطّلة عمدًا؛ بعد تعديل ملفات Python أعد تشغيل الخادم، وبعد تعديل CSS حدّث الصفحة.
-لا تستخدم `python streamlit_app.py`؛ شغّله بواسطة `streamlit run` كما في الأمر أعلاه.
-
-### ما يمكنك تجربته
-
-زر `English` أعلى الصفحة يبدّل الواجهة إلى الإنجليزية واتجاهها إلى LTR؛ يتحول إلى `العربية` للرجوع إلى RTL.
-يشمل التبديل القوائم وحالات العرض والعينات والتقارير التجريبية، ويحافظ على نص السؤال وسجل الجلسة والنسخ المحفوظة دون تشغيل بحث جديد.
-لا يترجم نص المستخدم تلقائيًا. اللغة المختارة مؤقتة داخل الجلسة فقط.
-
-1. اختر Web Research أو Scientific Research، أو اضغط مثالًا من الشريط الجانبي لتعبئة السؤال.
-2. اكتب سؤالًا واضغط «ابدأ العرض التجريبي». سيظهر تقدم محلي، ثم **عينة ثابتة حسب النمط وليست إجابة مولّدة عن السؤال**.
-3. جرّب تبويبات الملخص والمصادر والأدوات والتقرير؛ الاستشهادات المرقمة قابلة للنقر، وروابط `example.org` مراجع توضيحية وليست مصادر بحث.
-4. افتح «جرّب حالات الواجهة» لاختيار النجاح أو مصدر واحد أو خطأ تجريبي، ثم أعد تشغيل العرض. حالة الخطأ لا تنشئ سجل نجاح.
-5. في تبويب التقرير، زر الحفظ معطّل حتى توافق. الحفظ داخل ذاكرة جلسة العرض فقط، ولا يكتب في `reports` أو JSONL أو SQLite.
-6. افتح «التقارير التجريبية» للوصول إلى النسخ التي وافقت على الاحتفاظ بها. التنزيل يجهز TXT في الذاكرة، باسم يبدأ بـ`DEMO_` ونص يبدأ بـ`DEMO ONLY`.
-7. اضغط عنصرًا من سجل الجلسة لإعادة عرض سؤاله ونتيجته. البيانات مؤقتة، غير مشتركة بين الجلسات، وتُفقد عند انتهاء الجلسة أو إعادة تحميل الصفحة.
-
-لا تعرض مؤشرات الصفر في الواجهة رصيد حسابك؛ إنها توضح عدم وجود طلبات أو تكلفة فعلية في هذا العرض.
-الواجهة لا تتحقق من الروابط التوضيحية أو تنفذ أدواتها عند الضغط على «ابدأ»؛ فتح رابط خارجي بنفسك إجراء مستقل في المتصفح.
-
-### الملفات وحدود الربط
-
-| الملف | الغرض |
-|---|---|
-| `streamlit_app.py` | نقطة تشغيل الواجهة فقط |
-| `frontend/app.py` | العرض والتفاعل والتنقل وحالة الجلسة |
-| `frontend/style.css` | المظهر والعربية والاستجابة للشاشات الصغيرة |
-| `frontend/i18n.py` | نصوص الواجهة العربية والإنجليزية، دون خدمات ترجمة خارجية |
-| `frontend/contracts.py` | الطلب والنتيجة ومراجع العرض وواجهة `ResearchGateway` وتجهيز نص التنزيل |
-| `frontend/demo.py` | عينات ثابتة ومسار تقدم وخطأ تجريبي دون إنترنت أو تخزين |
-| `requirements-ui.txt` | اعتماد Streamlit المنفصل عن اعتماديات المحرك |
-| `.streamlit/config.toml` | إعداد الخادم المحلي والمظهر وإيقاف إحصاءات الاستخدام |
-| `tests/test_ui.py` | اختبارات قبول واجهة مع حظر الشبكات الخارجية |
-
-الربط القادم يحتاج محوّلًا ينفّذ `ResearchGateway` ويحوّل ناتج المحرك إلى بيانات العرض، ثم ربط التقدم والأخطاء وحماية الإنفاق والتأكيد الفعلي على الحفظ. سجل SQLite غير منفّذ هنا.
-لا تمرّر مفاتيح أو كائنات المحرك إلى كود الواجهة أو رسائل المتصفح. لا تنزع علامات DEMO قبل تنفيذ ربط معتمد ومختبر.
-
-### الاعتماديات والاختبارات
-
-استُخدم Streamlit `1.65.0` المطابق للنسخة الموجودة سابقًا في بيئة مصرح بفحصها؛ البيئتان Python `3.14.7`.
-ثُبّتت 24 حزمة ناقصة من **أرشيفات wheel الأصلية في pip HTTP cache** بعد التحقق من الإصدار واعتمادياته ووسوم Python/Windows.
-لم تُنسخ `site-packages`، ولم تُعدّل البيئة السابقة، ولم تُرقَّ أي حزمة موجودة، ولم تُنزّل حزم من الإنترنت.
-احتُفظ بالأرشيفات المتوافقة داخل `.runtime/ui_wheels`، وبقائمة الإصدارات داخل `.runtime/ui_install_manifest.json`، وكلاهما مستبعد من Git.
-عند الحاجة لإعادة تثبيت الواجهة من الأرشيفات الموجودة فقط:
+Do not recreate or upgrade a working environment unnecessarily. pip can reuse its existing cache. If the project-local UI wheel cache is present, UI dependencies can be installed offline with:
 
 ```powershell
 .\.venv\Scripts\python.exe -I -m pip --isolated --disable-pip-version-check install --no-index --find-links .runtime/ui_wheels -r requirements-ui.txt
 ```
 
-اختبارات الواجهة فقط، ثم جميع الاختبارات، ثم سلامة الحزم:
+That optional private cache is not part of a public checkout. No dependencies were installed or downloaded during final validation.
+
+## Configuration and credentials
+
+`.env.example` contains placeholders only. For **CLI configuration**, create a local file only if it does not already exist:
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -p test_ui.py -v
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -q
-.\.venv\Scripts\python.exe -I -m pip --isolated --disable-pip-version-check check
+if (-not (Test-Path -LiteralPath .env)) { Copy-Item -LiteralPath .env.example -Destination .env }
 ```
 
-التحقق في 5 نوفمبر 2026: 18 اختبار واجهة ناجحًا، و114 اختبارًا إجمالًا، و`No broken requirements found`.
-تغطي الاختبارات صلاحية السؤال، النمطين، نقص المصادر والفشل، موافقة الحفظ ومنع التكرار، التنزيل، التاريخ، عزل الجلسات، وعدم استيراد المحرك أو قواعد البيانات أو الشبكات في الواجهة.
-AppTest يسمح باتصال loopback الداخلي الذي يحتاجه asyncio على Windows فقط؛ أي اتصال خارجي محظور.
-قد تظهر رسالة `missing ScriptRunContext` من AppTest في وضع الاختبار؛ ليست خطأ في الخادم أو استدعاء بحث.
-اشتغل الخادم المحلي فعليًا، واختُبرت تعبئة السؤال والعرض العلمي والحفظ بعد الموافقة ومكتبة التقارير من المتصفح.
-فُحص التجاوب عند عرض 1366 و390 بكسل دون تجاوز أفقي؛ شوهدت واجهة الهاتف بصريًا. لا توجد دعوى اختبار كل الأجهزة أو المتصفحات.
-لم يتغير سجل الاستخدام أو ملفات التقارير والسجلات الحقيقية أثناء مجموعة الاختبار، ولم يُجرَ طلب OpenAI أو MCP حي لهذه المهمة.
+Fill placeholders privately on your own machine. Never paste credentials into questions, reports, screenshots, commits, or issue descriptions.
+
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | Required for real model requests |
+| `SEMANTIC_SCHOLAR_API_KEY` | Optional academic credential |
+| `OPENALEX_API_KEY` | Optional OpenAlex credential |
+| `ASTA_TOOL_KEY` | Optional Asta MCP credential |
+| `RESEARCH_MEMORY_DB` | Optional SQLite path inside `.runtime/` |
+
+The CLI loads local `.env` configuration when a research task is started. Importing modules, showing help, checking spending, and memory-only commands do not load it.
+
+**Streamlit deliberately does not load `.env`.** A CLI child process loading that file does not configure a separately started Streamlit process. The launcher below inherits existing process environment variables or asks for the OpenAI key through hidden terminal input. It passes the value in the child environment, not command arguments, files, output, or prompts. If hidden input is unavailable it fails closed rather than echoing the credential. Optional academic credentials must already be in the process environment.
+
+Codex/ChatGPT sign-in is separate from the project's SDK credential. This application uses the OpenAI API endpoint and its own usage ledger; a Codex chat session is not proof of application API configuration. No claim is made that the exact same key value was used across sessions.
+
+## CLI usage
+
+Read recorded spending without a model request:
+
+```powershell
+.\.venv\Scripts\python.exe -B main.py --budget-status
+```
+
+The following are **real research commands and may spend API credit**:
+
+```powershell
+.\.venv\Scripts\python.exe -B main.py --mode web --query "What is MCP and how does it connect AI agents to tools?" --verbose
+.\.venv\Scripts\python.exe -B main.py --mode scientific --query "What does research say about RAG in education?" --verbose
+.\.venv\Scripts\python.exe -B main.py --mode web --query "How does arXiv work?" --save arxiv_report.txt
+```
+
+The last command previews the validated report and asks for approval. Answering `n` creates no report. Saving is restricted to `reports/`; unique timestamp/UUID filenames and exclusive creation prevent silent overwrites.
+
+Use `--web-provider duckduckgo` only when intentionally selecting the existing alternate provider. Do not reset the ledger to work around a budget stop.
+
+## Streamlit startup
+
+From an interactive terminal in the project directory:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/start_streamlit.py
+```
+
+Open **http://127.0.0.1:8502/**. The launcher may ask for a masked credential when the process has none. A boolean-only configuration check makes no server or model request:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/start_streamlit.py --check
+```
+
+If the port is occupied, stop that server in its own terminal or choose another port:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/start_streamlit.py --port 8503
+```
+
+When the environment is already configured, direct startup also works:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8502
+```
+
+Restart the server after Python changes because file watching is disabled. A previously started server on 8501 may still show the old demo-only code; changing files alone does not restart it. Do not bind this unauthenticated application to a public network.
+
+Research executes only on explicit submission. Tabs, language changes, history reads, saving, and downloading do not rerun it. Repeating a question requires a separate, single-use acknowledgment of possible new cost. Failed attempts are also remembered within the session, preventing automatic paid retries. Reloading the browser can lose temporary session state; reopen the SQLite result instead of repeating research.
+
+The explicit DEMO switch retains labelled fixtures for UI review. Demo data never replaces a failed real answer or enters real research memory. Some engine messages remain in their original language when controls are switched.
+
+## SQLite memory
+
+Default: `.runtime/memory/research.sqlite3`. Configure a different approved private path using `--memory-db` or `RESEARCH_MEMORY_DB`. The path must remain inside `.runtime/` and use a supported SQLite extension.
+
+```powershell
+.\.venv\Scripts\python.exe -B main.py --memory-init
+.\.venv\Scripts\python.exe -B main.py --memory-list --memory-limit 5
+.\.venv\Scripts\python.exe -B main.py --memory-search "RAG" --memory-limit 5
+.\.venv\Scripts\python.exe -B main.py --memory-get "REPLACE_WITH_A_REAL_TASK_ID"
+```
+
+Memory-only commands are offline. Validated `success` and `degraded` research is stored automatically with its question, topic, mode, summary, ordered references, tools, UTC date, and task ID. Failed/unvalidated answers are not stored as completed research. The same task cannot replace an existing snapshot. Storage failure is disclosed without hiding a valid answer.
+
+Historical retrieval is labelled untrusted and not freshly verified. At most three small relevant snippets are available **to application context only; previous research is not supplied to the LLM**. Historical citations never populate a new task's evidence pool. Search is bounded text search, not semantic/vector memory. See [SQLite details](docs/sqlite_memory.md).
+
+`owner_id` is a host-selected namespace, not authentication. The UI uses the local operator namespace; browsers with access to that local service share that operator's space. Secure multi-user isolation and database encryption are not implemented.
+
+## Source verification and reports
+
+Only retrieved evidence can support final references. Scientific tools assign stable IDs such as `P1`; the host resolves them to original retrieved URLs. Known DOI identities and unambiguous arXiv identities can resolve equivalent links without fetching a guessed reference. Explicitly different arXiv versions, unknown IDs, and records without usable abstracts are rejected.
+
+Numbered scientific citations must match the ordered reference list. Every number in supported grouped citations such as `[1, 2]` is checked. Ambiguous numeric ranges are rejected. A shortage of evidence is disclosed; failed searches do not prove that no studies exist.
+
+These checks establish reference provenance and numbering, **not independent verification of every claim, factual accuracy, or source relevance**. Two URLs may come from the same organization. The model may still misinterpret snippets or abstracts.
+
+Streamlit downloads the displayed report in memory without a model request. Server-side saving requires a separate checkbox and save click, then uses the same protected writer as CLI. Automatic SQLite recording does not imply permission to save a report. Historical exports are labelled as previous research, not fresh retrieval.
+
+## Spending and execution limits
+
+| Control | Actual application setting |
+|---|---:|
+| Maximum estimated charge per research task | $0.03 |
+| Daily cap, application accounting day | $0.30 |
+| Cumulative experiment cap | $5.00 |
+| Maximum model calls per task | 10 |
+| Maximum output tokens per call | 1,200 |
+| Conservative input estimate bound | 200,000 |
+
+Before each model call the application reserves an estimated charge in `.runtime/usage.json`, with locking across processes. Measured usage settles the reservation. Failed/interrupted calls with uncertain billing keep their reservation; missing or corrupt prior state fails closed. Streamlit and CLI use this same ledger.
+
+The input bound is a byte-based conservative estimate, not a measured token count. These are **application-side protections**, not provider-enforced account spending guarantees. Activity outside this application is not tracked. See the existing [cost analysis](cost_analysis.md); it was not regenerated during final validation.
+
+## Automated validation
+
+The complete suite is offline. Model HTTP responses and research services are mocked; real LangChain/SDK integration and SQLite/file operations execute against isolated fixtures.
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -q
+.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p test_final_security.py -v
+.\.venv\Scripts\python.exe -I -m pip --isolated --disable-pip-version-check check
+.\.venv\Scripts\python.exe -B scripts/verify_submission.py
+```
+
+Final result: **201 tests passed**. Controlled hostile cases cover exfiltration attempts, forged write approval, hostile stored memory, malicious direct inputs, citation manipulation, and overwrites. Deterministic host-boundary tests are not a live-model jailbreak-resistance evaluation. See [final validation report](docs/final_validation_report.md) and [attack scenarios](docs/security_test_cases.md).
+
+Tests never reset the real budget ledger. Their synthetic ledgers/traces remain in `.runtime/tests/`, and report fixtures in `reports/.tests/`. AppTest's `missing ScriptRunContext` warnings are expected in test mode; assertive failure-case warnings are not failed test results.
+
+## Submission traces
+
+| File | Historical source run | Events | Final status |
+|---|---|---:|---|
+| [success_1.jsonl](traces/success_1.jsonl) | `46c433f92cc74827a77a5cddb3a26e6a` | 17 | `success` |
+| [near_failure_recovery.jsonl](traces/near_failure_recovery.jsonl) | `d30d284e0f1341b18c34dea318dc1d8c` | 27 | `degraded` |
+| [explicit_failure.jsonl](traces/explicit_failure.jsonl) | `70d4c78c3b6b44b693f687d892df45d1` | 20 | `no_evidence` |
+
+These are complete, naturally occurring historical CLI runs, not manufactured or injected events. They demonstrate Exa-backed success, scientific provider failure and recovery, and safe failure when all attempted scientific services were rate-limited. They retain original task identity, chronology, usage, and outcome. No new paid call was needed to create the deliverables. The previous trivial invalid-input example is preserved in `traces/archive/`.
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/verify_submission.py
+Get-Content traces/success_1.jsonl
+Get-Content traces/near_failure_recovery.jsonl
+Get-Content traces/explicit_failure.jsonl
+```
+
+The verifier checks identity, sequence, accounting, and required outcome/recovery evidence. Where private originals exist, it also checks full normalized run equality. Public clones cannot independently inspect private originals. Prompts, credentials, and final answer bodies are intentionally not part of the trace schema; validated final status is emitted only after output validation.
+
+Private traces stay in `.runtime/traces/`. The existing exporter refuses to overwrite evidence or promote mocked/probe runs. Use it only for a completed suitable genuine CLI run:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/export_trace.py .runtime/traces/REAL_TASK_ID.jsonl success_1
+```
+
+That example intentionally refuses while the target deliverable already exists. UI execution traces use `streamlit`; they are not relabelled as CLI runs.
+
+## Known limitations and remaining work
+
+- Scientific services can return 429, timeouts or unavailable responses. Asta live research remains unverified without its optional credential.
+- Web output may exceed the fixed 1,200-token response allowance, causing invalid structured output. `finish_reason` is not currently captured, so past truncation is a supported hypothesis rather than a proven cause in every case.
+- Citations are provenance-checked, not a full semantic fact-check. Academic abstracts may be missing or truncated, and full papers are not reviewed.
+- SQLite memory is application-level history, not model memory, vector RAG, or cross-user authentication.
+- This local application has no public deployment, authenticated access, retention policy, or hardened multi-user service. Do not expose it to the internet as-is.
+- New paid Streamlit research and live-model hostile-input tests were not executed during final validation. They require explicit approval before an agent runs them.
+
+## Attribution and licensing status
+
+The project adapts the tutorial agent from [Tech With Tim — PythonAIAgentFromScratch](https://github.com/techwithtim/PythonAIAgentFromScratch). The tutorial's agent/tool-calling approach was extended incrementally; it was not replaced with another agent framework.
+
+On **5 November 2026**, the reviewed upstream repository root and displayed README did **not show an explicit license grant**. This project does not assume MIT, Apache, or another license for upstream code and does not add a guessed license. Confirm the applicable permission/license with the rights holder before public redistribution. [GitHub's licensing guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository) explains why a public repository alone is not a general license grant.
+
+`sample.env` was removed from the local Git index and ignored without reading or deleting its on-disk contents. That does not erase earlier commits. A historical credential review remains outstanding; no claim is made that unread environment files or repository history are secret-free. No history was rewritten and no commit or push was made by final validation.
+
+Deployment, public release/licensing clearance, and any newly authorized paid validation remain separate steps.

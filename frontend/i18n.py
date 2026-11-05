@@ -102,6 +102,54 @@ EN = {
 }
 
 
+EN.update({
+    "الأبحاث السابقة": "Research history", "التقارير": "Reports", "عن التطبيق": "About the application",
+    "وضع العرض التجريبي": "Demo preview mode", "أحدث الأبحاث المحلية": "Recent local research",
+    "لا توجد أبحاث سابقة مطابقة.": "No matching previous research.",
+    "حفظ الخادم اختياري ويتطلب موافقتك؛ تنزيل النص لا يشغّل بحثًا جديدًا.": "Saving on this device is optional and requires consent. Downloading does not run research.",
+    "أوافق على حفظ هذا التقرير داخل reports على هذا الجهاز": "I agree to save this report in reports on this device",
+    "حُفظ التقرير": "Report saved", "حفظ التقرير": "Save report", "تنزيل التقرير TXT": "Download TXT report",
+    "حُفظ التقرير بعد موافقتك.": "The report was saved after your approval.",
+    "بحث سابق — لم يُشغّل بحث جديد": "Historical research — no new research executed",
+    "نتيجة بحث متحققة": "Validated research result", "اكتمل مع قيود": "Completed with limitations",
+    "اكتمل البحث": "Research complete", "هذه لقطة تاريخية من SQLite؛ لم تُراجع مراجعها مجددًا ولم تُرسل للنموذج.": "Historical SQLite snapshot. Its sources were not rechecked and it was not sent to the model.",
+    "اكتمل البحث مع قيود: راجع نقص المصادر أو تعذّر الخدمات في الملخص.": "Completed with limitations: check the summary for missing sources or unavailable services.",
+    "النتيجة متحققة، لكن تعذّر حفظها في ذاكرة SQLite.": "The result is validated, but could not be stored in SQLite.",
+    "المصادر": "Sources", "استدعاءات النموذج": "Model calls", "التكلفة المحسوبة": "Calculated cost",
+    "توكنات الإدخال / الإخراج": "Input / output tokens", "معاينة التقرير": "Report preview",
+    "مصدر مسترجع؛ يعتمد البحث على المقتطف أو الملخص المتاح.": "Retrieved source; research uses its available snippet or abstract.",
+    "مرجع تاريخي؛ لم يُسترجع مجددًا.": "Historical reference; not fetched again.",
+    "أدوات البحث المسجّلة لهذه النتيجة؛ لا يعاد تشغيلها عند فتح التبويب.": "Tools recorded for this result. Opening this tab does not run them again.",
+    "البحث العلمي يعتمد على الملخصات والبيانات الوصفية فقط، دون قراءة الأوراق الكاملة.": "Scientific research uses abstracts and metadata only, not full papers.",
+    "أطلب إعادة بحث السؤال نفسه مع احتمال تكلفة جديدة": "Run the same question again, accepting a possible new cost",
+    "ابدأ البحث": "Start research", "جارٍ البحث والتحقق…": "Researching and verifying…",
+    "الانتظار حتى اكتمال التحقق": "Waiting for validation", "تعذّر إكمال البحث": "Research could not be completed",
+    "اكتمل التحقق من النتيجة": "Result validation complete",
+    "تجهيز البحث والتحقق من الميزانية": "Preparing research and checking the budget",
+    "معالجة البحث بالنموذج": "Processing research with the model", "تشغيل أداة البحث": "Running a research tool",
+    "حفظ النتيجة في الذاكرة": "Recording the result in memory",
+    "هذه المحاولة موجودة في الجلسة؛ لإعادة البحث وافق صراحةً على التكلفة الجديدة.": "This attempt already exists in this session. Explicitly accept a new cost to repeat it.",
+    "OPENAI_API_KEY غير مهيّأ في بيئة العملية. لم يُرسل طلب.": "OPENAI_API_KEY is not configured in the process environment. No request was sent.",
+    "قد تُحسب تكلفة للمحاولة الفاشلة؛ راجع رصيد الميزانية قبل إعادة البحث.": "A failed attempt may still cost money. Review the budget before trying again.",
+    "اختر النمط واكتب سؤالك. لن يبدأ بحث حتى تضغط زر البدء.": "Choose a mode and enter your question. Research starts only when you press Start.",
+    "استخدام محلي لمشغّل واحد. لا يوجد تسجيل دخول أو عزل آمن متعدد المستخدمين.": "Local use by one operator. Authentication and secure multi-user isolation are not implemented.",
+    "الإنفاق المحسوب لليوم": "Today's recorded spending", "إجمالي المشروع": "Project total",
+    "حجوزات غير مسوّاة": "Unsettled reservations",
+    "عرض SQLite فقط؛ لا اتصال بالنموذج ولا إعادة تحقق من الروابط التاريخية.": "SQLite history only. No model calls or rechecking of historical links.",
+    "ابحث بعنوان البحث أو السؤال": "Search by research topic or question",
+    "افتح بحثًا سابقًا أو أكمل بحثًا جديدًا لمعاينة تقريره وتنزيله.": "Open previous research or complete a new research task to preview and download its report.",
+    "هذه واجهة محلية متصلة بمحرك CLI نفسه وMCP وSQLite. البحث وحده قد يستهلك API؛ الاستعراض والحفظ والتنزيل لا يشغّلان النموذج.": "This local interface uses the existing CLI engine, MCP and SQLite. Research may incur API costs; browsing, saving and downloading do not run the model.",
+    "حدود الإنفاق: $0.03 للمهمة، $0.30 لليوم، $5 للمشروع، و10 استدعاءات نموذج. لا تُرسل الذاكرة السابقة للنموذج.": "Limits: $0.03 per task, $0.30 per day, $5 total and 10 model calls. Historical memory is not sent to the model.",
+    "لا تُحمّل الواجهة ملفات .env. جهّز متغيرات العملية قبل تشغيل Streamlit، ولا تدخل المفاتيح في واجهة البحث.": "The interface does not load .env files. Configure process environment variables before starting Streamlit. Never put keys in a research question.",
+    "تعذّرت قراءة الميزانية؛ لا تصفّر سجل الاستخدام.": "The budget could not be read. Do not reset the usage ledger.",
+    "تعذّر استعراض ذاكرة SQLite بأمان.": "SQLite history could not be listed safely.",
+    "تعذّر استرجاع البحث السابق بأمان.": "The previous research could not be retrieved safely.",
+    "البحث السابق غير موجود.": "The previous research was not found.",
+    "تعذّر حفظ التقرير؛ تحقق من التقارير قبل إعادة المحاولة.": "The report could not be saved. Check existing reports before trying again.",
+    "مسار ذاكرة SQLite غير صالح؛ راجع إعدادات العملية.": "The SQLite memory path is invalid. Check process configuration.",
+})
+
+
 def translate(text: str, language: str = "ar") -> str:
     """Translate owned UI copy, including fixed HTML fragments. Not user data."""
     if language != "en":

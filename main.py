@@ -55,6 +55,7 @@ class ResearchValidationError(ValueError):
         "unsupported_summary_url": "تضمن الملخص رابطًا غير مسترجع كدليل صالح.",
         "missing_numbered_citation": "الملخص العلمي لا يحتوي على استشهادات مرقمة مثل [1].",
         "citation_out_of_range": "رقم استشهاد في الملخص يتجاوز قائمة مصادر الإجابة.",
+        "invalid_numbered_citation": "صيغة استشهاد علمي غير مدعومة؛ استخدم [1] أو [1، 2] دون نطاقات مبهمة.",
         "invalid_cleaned_result": "أصبحت الإجابة غير صالحة بعد تنقية النص وتطبيق حدود الحقول.",
     }
 
@@ -135,14 +136,27 @@ def validate_response(value: Any, context: WebResearchContext) -> ResearchRespon
         raise ResearchValidationError("unsupported_summary_url")
     summary = response.summary
     if context.mode == "scientific":
-        citations = re.findall(r"\[(\d+)\]", summary)
+        bracket_pattern = r"\[([^\[\]\r\n]+)\]"
+        groups = re.findall(bracket_pattern, summary)
+        numeric_groups = []
+        for group in groups:
+            if re.match(r"\s*\d", group):
+                if not re.fullmatch(r"\s*\d+(?:\s*[,،;؛]\s*\d+)*\s*", group):
+                    raise ResearchValidationError("invalid_numbered_citation")
+                numeric_groups.append(group)
+        citations = [number for group in numeric_groups for number in re.findall(r"\d+", group)]
         if not citations:
             raise ResearchValidationError("missing_numbered_citation")
         # Bound conversion before int(): hostile digit strings must not escape diagnostics.
         if any(len(number) > 2 or not 1 <= int(number) <= len(canonical) for number in citations):
             raise ResearchValidationError("citation_out_of_range")
         numbering = {old: sources.index(url) + 1 for old, url in enumerate(canonical, 1)}
-        summary = re.sub(r"\[(\d+)\]", lambda match: f"[{numbering[int(match[1])]}]", summary)
+        def remap_citation_group(match: re.Match) -> str:
+            group = match[1]
+            if group not in numeric_groups:
+                return match[0]
+            return "[" + re.sub(r"\d+", lambda number: str(numbering[int(number[0])]), group) + "]"
+        summary = re.sub(bracket_pattern, remap_citation_group, summary)
     # Resolve only references tied to actual retrieved evidence, never guessed papers.
     def canonical_prose_url(match: re.Match) -> str:
         url = match[0].rstrip(".,;،؛")

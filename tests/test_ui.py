@@ -30,7 +30,9 @@ class FrontendTests(unittest.TestCase):
         self.addCleanup(network.stop)
 
     def app(self):
-        app = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=15).run()
+        app = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=15)
+        app.session_state["ui_demo_mode"] = True
+        app.run()
         self.assertFalse(app.exception)
         return app
 

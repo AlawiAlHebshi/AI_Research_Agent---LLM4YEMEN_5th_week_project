@@ -1,12 +1,12 @@
-"""Presentation contracts for a future, explicitly approved backend adapter."""
+"""Separate presentation contracts for demo fixtures and validated backend results."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Literal, Protocol
-from urllib.parse import urlsplit
 from uuid import uuid4
+from safety import safe_url
 
 Mode = Literal["web", "scientific"]
 Scenario = Literal["success", "partial", "error"]
@@ -34,8 +34,7 @@ class Source:
     description: str
 
     def __post_init__(self):
-        parsed = urlsplit(self.url)
-        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        if safe_url(self.url) != self.url:
             raise ValueError("Invalid source URL")
 
 
@@ -65,10 +64,33 @@ class ResearchResult:
 
 
 class ResearchGateway(Protocol):
-    """UI boundary only. No live gateway is implemented or configured."""
+    """Connected UI boundary; demo fixtures use their separate offline gateway."""
 
     def research(self, request: ResearchRequest, on_progress: Callable[[Progress], None],
-                 *, scenario: Scenario = "success") -> ResearchResult: ...
+                 *, request_id: str) -> BackendResult: ...
+
+
+@dataclass(frozen=True)
+class BackendResult:
+    """Validated engine output or a clearly labelled historical SQLite snapshot."""
+
+    topic: str
+    summary: str
+    sources: tuple[Source, ...]
+    tools_used: tuple[str, ...]
+    request: ResearchRequest
+    status: Literal["success", "degraded"]
+    id: str
+    created_at: str
+    report: str
+    historical: bool = False
+    memory_status: str = "saved"
+    model_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_nanos: int = 0
+    reserved_nanos: int = 0
+    is_demo: Literal[False] = field(default=False, init=False)
 
 
 def export_report(result: ResearchResult, language: str = "ar") -> str:

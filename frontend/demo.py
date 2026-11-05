@@ -23,7 +23,7 @@ class DemoResearchError(RuntimeError):
 
 
 class DemoGateway:
-    """The only gateway shipped with the UI: deterministic, offline demo data."""
+    """Explicit offline preview; never a fallback for a failed real research task."""
 
     def research(self, request: ResearchRequest, on_progress: Callable[[Progress], None] = lambda value: None,
                  *, scenario: Scenario = "success") -> ResearchResult:
@@ -83,7 +83,7 @@ class DemoGateway:
 
 def localize_result(result: ResearchResult, language: str = "ar") -> ResearchResult:
     """Translate fixed fixtures for display, preserving IDs and the exact query."""
-    if language != "en":
+    if language != "en" or not result.is_demo:
         return result
     scientific = result.request.mode == "scientific"
     sources = tuple(replace(source,

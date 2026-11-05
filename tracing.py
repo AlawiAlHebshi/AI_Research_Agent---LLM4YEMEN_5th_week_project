@@ -54,7 +54,7 @@ def scrub(value):
 
 class TraceWriter:
     def __init__(self, task_id: str | None = None, *, kind: str = "cli", path: Path | None = None):
-        if kind not in {"cli", "offline_test", "public_tool_probe"}:
+        if kind not in {"cli", "streamlit", "offline_test", "public_tool_probe"}:
             raise TraceError("Invalid execution kind")
         self.task_id = task_id or uuid4().hex
         self.kind = kind
@@ -100,7 +100,7 @@ def read_trace(path: Path) -> list[dict]:
                 or not isinstance(record.get("task_id"), str)
                 or record.get("task_id") != records[0].get("task_id")
                 or record.get("execution_kind") != records[0].get("execution_kind")
-                or record.get("execution_kind") not in {"cli", "offline_test", "public_tool_probe"}
+                or record.get("execution_kind") not in {"cli", "streamlit", "offline_test", "public_tool_probe"}
                 or record.get("event") not in EVENTS or set(record.get("data", {})) - FIELDS):
             raise TraceError("Invalid trace sequence or schema")
     return records

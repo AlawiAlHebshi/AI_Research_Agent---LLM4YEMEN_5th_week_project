@@ -1,4 +1,4 @@
-"""Local frontend demo only. Never imports or invokes the research backend."""
+"""Local Streamlit entry point; connected by default, with an explicit demo switch."""
 
 from frontend.app import render
 

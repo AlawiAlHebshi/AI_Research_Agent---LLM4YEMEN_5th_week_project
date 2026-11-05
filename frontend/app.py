@@ -1,4 +1,4 @@
-"""Bilingual Streamlit frontend. Research and report state is demo/session-only."""
+"""Bilingual demo presentation and dispatch to the connected local interface."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def toggle_language():
     st.session_state.ui_language = "en" if language() == "ar" else "ar"
     # Selection labels are serialized by Streamlit. Resend their unchanged raw
     # values so the browser checks the newly translated labels immediately.
-    for key in ("ui_mode", "ui_page", "ui_scenario", "ui_saved_selection"):
+    for key in ("ui_mode", "ui_page", "ui_scenario", "ui_saved_selection", "live_mode", "live_page"):
         if key in st.session_state:
             st.session_state[key] = st.session_state[key]
 
@@ -245,6 +245,10 @@ def about_page():
 
 
 def render():
+    if not st.session_state.get("ui_demo_mode", False):
+        from frontend.live import render as render_live
+        render_live()
+        return
     st.set_page_config(page_title=t("المساعد البحثي · عرض الواجهة"), page_icon="◈", layout="wide", initial_sidebar_state="auto")
     st.markdown("<style>" + Path(__file__).with_name("style.css").read_text(encoding="utf-8") + "</style>", unsafe_allow_html=True)
     initialize()
@@ -260,6 +264,8 @@ def render():
     st.button("English" if language() == "ar" else t("العربية"), key="ui_language_toggle",
               on_click=toggle_language, help=t("Switch interface language / تبديل لغة الواجهة"))
     sidebar()
+    with st.sidebar:
+        st.toggle(t("وضع العرض التجريبي"), key="ui_demo_mode")
     st.markdown(t('<div class="topline"><span>مساحة عملك البحثية / معاينة الواجهة</span><span class="demo-badge">◌ وضع تجريبي · دون بحث فعلي</span></div>'), unsafe_allow_html=True)
     if st.session_state.ui_page == PAGES[0]:
         research_page()
