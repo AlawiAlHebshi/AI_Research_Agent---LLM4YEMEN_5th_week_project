@@ -47,3 +47,10 @@ def free_exa_probe() -> dict:
 
 def cloud_probe_enabled() -> bool:
     return not local_runtime() and os.environ.get("CLOUD_MCP_CHECK", "").casefold() == "true"
+
+
+def cloud_configuration_status() -> dict[str, bool]:
+    """Presence diagnostics only: never return configuration or credential values."""
+    return {"SUPABASE_URL": bool(os.environ.get("SUPABASE_URL")),
+            "SUPABASE_SECRET_KEY": bool(os.environ.get("SUPABASE_SECRET_KEY")),
+            "CLOUD_RESEARCH_ENABLED": os.environ.get("CLOUD_RESEARCH_ENABLED", "").casefold() == "true"}

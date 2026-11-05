@@ -191,6 +191,9 @@ def render():
         st.error(t(error.message))
         return
     if gateway().cloud_mode:
+        presence = deployment_policy.cloud_configuration_status()
+        st.caption("Budget configuration · " + " · ".join(
+            f"{name}: {'OK' if present else 'MISSING'}" for name, present in presence.items()))
         if gateway().cloud_budget_enabled:
             st.info(t("البحث السحابي متصل بسجل ميزانية دائم. لا يبدأ أي طلب دون تسجيل حجز مالي ناجح."))
             st.caption(t("التاريخ الخاص غير متاح على السحابة؛ النتائج خاصة بالجلسة وملفات التقارير على الخادم مؤقتة."))

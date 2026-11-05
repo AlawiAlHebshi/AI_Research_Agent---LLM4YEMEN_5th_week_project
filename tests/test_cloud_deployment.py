@@ -4,13 +4,20 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 
-from deployment_policy import cloud_probe_enabled, free_exa_probe, initialize_secrets, local_runtime
+from deployment_policy import cloud_probe_enabled, free_exa_probe, initialize_secrets, local_runtime, cloud_configuration_status
 from frontend.contracts import ResearchRequest
 from scripts.start_streamlit import prepare_environment
 from streamlit_backend import BackendGateway, GatewayError
 
 
 class CloudDeploymentTests(unittest.TestCase):
+    def test_configuration_diagnostics_contain_only_booleans(self):
+        with patch.dict(os.environ, {"SUPABASE_URL": "not-shown", "SUPABASE_SECRET_KEY": "not-shown",
+                                    "CLOUD_RESEARCH_ENABLED": "true"}, clear=True):
+            status = cloud_configuration_status()
+            self.assertTrue(all(type(value) is bool and value for value in status.values()))
+            self.assertNotIn("not-shown", str(status))
+
     def test_default_cloud_rejects_research_before_model_or_ledger(self):
         with patch.dict(os.environ, {}, clear=True):
             for _ in range(2):  # A new gateway after ephemeral storage loss is still blocked.
