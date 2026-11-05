@@ -90,6 +90,19 @@ class ConnectedUITests(unittest.TestCase):
         self.assertEqual(len(self.requests), 4)
         self.assertFalse(app.checkbox(key="live_repeat_" + app.session_state["live_request_id"]).value)
 
+    def test_editing_question_and_changing_mode_do_not_submit_research(self):
+        app = self.submit(self.app())
+        original = app.session_state["live_active"].id
+        app.radio(key="live_mode").set_value("scientific").run()
+        app.text_area(key="live_query").set_value("A different unsubmitted question").run()
+        app.button(key="ui_language_toggle").click().run()
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["live_active"].id, original)
+        self.assertEqual(len(self.requests), 2)
+        self.assertEqual(len(self.backend.attempts), 1)
+        self.assertEqual(len(self.backend.results), 1)
+
     def test_invalid_results_never_enable_saving_or_downloading(self):
         app = self.app([baseline.tool_call(), baseline.final_message(["https://example.net/unretrieved"])])
         self.submit(app)

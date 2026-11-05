@@ -9,6 +9,10 @@ The operator enters `OPENAI_API_KEY` directly in Streamlit's official **Secrets*
 settings as a root-level TOML string. Never commit a secrets file or send the key
 through chat. The app reports configuration presence only, not key validity.
 Root secrets are loaded through Streamlit's normal secrets mechanism.
+After saving changed Secrets, close the settings dialog and use **Manage app >
+Reboot app**, then reload the page. File watching is disabled in this project;
+an existing process or session can otherwise retain older configuration.
+Never inspect or screenshot the Secrets editor while credential values are shown.
 
 Optional root setting `CLOUD_MCP_CHECK = "true"` enables one anonymous, fixed Exa
 connectivity/search check per process. It uses no OpenAI requests or paid Exa key.
